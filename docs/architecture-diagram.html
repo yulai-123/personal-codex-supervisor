@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personal Codex Assistant Architecture</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #f7f8fb;
+    color: #18202f;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  .wrap {
+    width: 1220px;
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid #d9dee8;
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(24, 32, 47, 0.08);
+    overflow: hidden;
+  }
+  .header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid #e4e8f0;
+  }
+  .title {
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin: 0 0 8px;
+  }
+  .subtitle {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #596579;
+    margin: 0;
+  }
+  svg {
+    display: block;
+    width: 1220px;
+    height: 820px;
+  }
+  .lane {
+    fill: #fbfcff;
+    stroke: #e1e6ef;
+    stroke-width: 1;
+  }
+  .lane-title {
+    font-size: 13px;
+    font-weight: 700;
+    fill: #596579;
+  }
+  .node {
+    stroke-width: 1.4;
+    rx: 8;
+    ry: 8;
+  }
+  .node-title {
+    font-size: 15px;
+    font-weight: 700;
+    fill: #172033;
+  }
+  .node-text {
+    font-size: 12px;
+    fill: #596579;
+  }
+  .node-strong {
+    font-size: 13px;
+    font-weight: 700;
+    fill: #172033;
+  }
+  .edge {
+    fill: none;
+    stroke: #69758a;
+    stroke-width: 1.6;
+  }
+  .edge-strong {
+    fill: none;
+    stroke: #2563eb;
+    stroke-width: 2;
+  }
+  .edge-task {
+    fill: none;
+    stroke: #0f766e;
+    stroke-width: 2;
+  }
+  .edge-muted {
+    fill: none;
+    stroke: #9aa4b5;
+    stroke-width: 1.3;
+    stroke-dasharray: 5 5;
+  }
+  .label {
+    font-size: 11px;
+    fill: #465268;
+  }
+  .foot {
+    font-size: 12px;
+    fill: #6b7689;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1 class="title">个人 Codex 助手：双层主节点 / 任务节点架构</h1>
+    <p class="subtitle">微信只面对一个主助手；主节点负责理解、编排和发言；第二层任务负责并发执行、留痕、把结构化结果反馈给主节点。</p>
+  </div>
+
+  <svg viewBox="0 0 1220 820" role="img" aria-label="个人 Codex 助手双层架构图">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L8,3 z" fill="#69758a"></path>
+      </marker>
+      <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"></path>
+      </marker>
+      <marker id="arrowTask" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L8,3 z" fill="#0f766e"></path>
+      </marker>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#18202f" flood-opacity="0.10"></feDropShadow>
+      </filter>
+    </defs>
+
+    <rect class="lane" x="28" y="34" width="184" height="694" rx="8"></rect>
+    <rect class="lane" x="236" y="34" width="222" height="694" rx="8"></rect>
+    <rect class="lane" x="482" y="34" width="250" height="694" rx="8"></rect>
+    <rect class="lane" x="756" y="34" width="222" height="694" rx="8"></rect>
+    <rect class="lane" x="1002" y="34" width="190" height="694" rx="8"></rect>
+
+    <text class="lane-title" x="48" y="62">外部入口</text>
+    <text class="lane-title" x="256" y="62">事件层</text>
+    <text class="lane-title" x="502" y="62">第一层：主节点</text>
+    <text class="lane-title" x="776" y="62">第二层：任务节点</text>
+    <text class="lane-title" x="1022" y="62">状态与运行环境</text>
+
+    <rect class="node" x="54" y="102" width="132" height="76" fill="#ecfdf5" stroke="#2ba66a" filter="url(#shadow)"></rect>
+    <text class="node-title" x="86" y="130">微信</text>
+    <text class="node-text" x="74" y="153">唯一主入口</text>
+    <text class="node-text" x="74" y="170">对话 / 追问</text>
+
+    <rect class="node" x="54" y="262" width="132" height="76" fill="#fff7ed" stroke="#f59e0b" filter="url(#shadow)"></rect>
+    <text class="node-title" x="82" y="290">定时器</text>
+    <text class="node-text" x="74" y="313">cron / interval</text>
+    <text class="node-text" x="74" y="330">只触发任务</text>
+
+    <rect class="node" x="54" y="422" width="132" height="76" fill="#eff6ff" stroke="#3b82f6" filter="url(#shadow)"></rect>
+    <text class="node-title" x="76" y="450">本机工具</text>
+    <text class="node-text" x="74" y="473">文件 / 脚本</text>
+    <text class="node-text" x="74" y="490">外部信息</text>
+
+    <rect class="node" x="260" y="90" width="174" height="92" fill="#f8fafc" stroke="#64748b" filter="url(#shadow)"></rect>
+    <text class="node-title" x="306" y="119">Inbox</text>
+    <text class="node-text" x="284" y="143">所有入口先写事件</text>
+    <text class="node-text" x="284" y="160">去重、游标、幂等</text>
+    <text class="node-text" x="284" y="177">微信 token 保存</text>
+
+    <rect class="node" x="260" y="236" width="174" height="92" fill="#eef2ff" stroke="#6366f1" filter="url(#shadow)"></rect>
+    <text class="node-title" x="290" y="265">Supervisor Queue</text>
+    <text class="node-text" x="284" y="289">微信消息高优先级</text>
+    <text class="node-text" x="284" y="306">后台结果合并摘要</text>
+    <text class="node-text" x="284" y="323">主节点单飞执行</text>
+
+    <rect class="node" x="260" y="382" width="174" height="92" fill="#f0fdfa" stroke="#14b8a6" filter="url(#shadow)"></rect>
+    <text class="node-title" x="296" y="411">Task Event Bridge</text>
+    <text class="node-text" x="284" y="435">任务结果结构化</text>
+    <text class="node-text" x="284" y="452">status / summary</text>
+    <text class="node-text" x="284" y="469">主节点按需读取</text>
+
+    <rect class="node" x="512" y="100" width="190" height="110" fill="#e0f2fe" stroke="#0284c7" filter="url(#shadow)"></rect>
+    <text class="node-title" x="546" y="129">Supervisor Codex</text>
+    <text class="node-text" x="536" y="153">wechat_main thread</text>
+    <text class="node-text" x="536" y="170">理解你、决定策略</text>
+    <text class="node-text" x="536" y="187">不直接承载重活</text>
+    <text class="node-text" x="536" y="204">可 resume / auto compact</text>
+
+    <rect class="node" x="512" y="262" width="190" height="106" fill="#f5f3ff" stroke="#8b5cf6" filter="url(#shadow)"></rect>
+    <text class="node-title" x="552" y="291">主节点工具箱</text>
+    <text class="node-text" x="536" y="315">start_task / continue</text>
+    <text class="node-text" x="536" y="332">get_task_status/result</text>
+    <text class="node-text" x="536" y="349">schedule / cancel / notify</text>
+
+    <rect class="node" x="512" y="420" width="190" height="106" fill="#fefce8" stroke="#ca8a04" filter="url(#shadow)"></rect>
+    <text class="node-title" x="542" y="449">Session Maintenance</text>
+    <text class="node-text" x="536" y="473">每日/按阈值总结</text>
+    <text class="node-text" x="536" y="490">生成 handoff summary</text>
+    <text class="node-text" x="536" y="507">开启新主 session</text>
+
+    <rect class="node" x="512" y="582" width="190" height="76" fill="#ecfdf5" stroke="#16a34a" filter="url(#shadow)"></rect>
+    <text class="node-title" x="562" y="611">Outbox 决策</text>
+    <text class="node-text" x="536" y="635">由主节点决定是否通知</text>
+    <text class="node-text" x="536" y="652">避免任务直接刷屏</text>
+
+    <rect class="node" x="782" y="94" width="170" height="92" fill="#f0fdfa" stroke="#0f766e" filter="url(#shadow)"></rect>
+    <text class="node-title" x="818" y="123">Task Orchestrator</text>
+    <text class="node-text" x="806" y="147">创建 run / lease</text>
+    <text class="node-text" x="806" y="164">并发限制 / 重试</text>
+    <text class="node-text" x="806" y="181">状态机管理</text>
+
+    <rect class="node" x="782" y="238" width="170" height="92" fill="#ecfeff" stroke="#0891b2" filter="url(#shadow)"></rect>
+    <text class="node-title" x="820" y="267">Task Workers</text>
+    <text class="node-text" x="806" y="291">Codex fresh/resume</text>
+    <text class="node-text" x="806" y="308">并发跑重任务</text>
+    <text class="node-text" x="806" y="325">产出日志和产物</text>
+
+    <rect class="node" x="782" y="382" width="170" height="92" fill="#fff7ed" stroke="#ea580c" filter="url(#shadow)"></rect>
+    <text class="node-title" x="824" y="411">定时任务</text>
+    <text class="node-text" x="806" y="435">到点启动 worker</text>
+    <text class="node-text" x="806" y="452">结果回传主节点</text>
+    <text class="node-text" x="806" y="469">不直接占主 session</text>
+
+    <rect class="node" x="782" y="526" width="170" height="92" fill="#fef2f2" stroke="#e11d48" filter="url(#shadow)"></rect>
+    <text class="node-title" x="812" y="555">手动复杂任务</text>
+    <text class="node-text" x="806" y="579">由主节点派生</text>
+    <text class="node-text" x="806" y="596">可继续、可查询</text>
+    <text class="node-text" x="806" y="613">不阻塞微信对话</text>
+
+    <rect class="node" x="1028" y="92" width="138" height="110" fill="#f8fafc" stroke="#475569" filter="url(#shadow)"></rect>
+    <text class="node-title" x="1058" y="121">SQLite WAL</text>
+    <text class="node-text" x="1046" y="145">events / sessions</text>
+    <text class="node-text" x="1046" y="162">tasks / runs</text>
+    <text class="node-text" x="1046" y="179">task_events</text>
+    <text class="node-text" x="1046" y="196">outbox / artifacts</text>
+
+    <rect class="node" x="1028" y="262" width="138" height="88" fill="#eff6ff" stroke="#2563eb" filter="url(#shadow)"></rect>
+    <text class="node-title" x="1052" y="291">Host Codex</text>
+    <text class="node-text" x="1046" y="315">~/.codex</text>
+    <text class="node-text" x="1046" y="332">登录态 / 配置 / skill</text>
+
+    <rect class="node" x="1028" y="410" width="138" height="88" fill="#ecfdf5" stroke="#16a34a" filter="url(#shadow)"></rect>
+    <text class="node-title" x="1064" y="439">launchd</text>
+    <text class="node-text" x="1046" y="463">KeepAlive</text>
+    <text class="node-text" x="1046" y="480">崩溃恢复</text>
+
+    <rect class="node" x="1028" y="558" width="138" height="88" fill="#fff7ed" stroke="#ea580c" filter="url(#shadow)"></rect>
+    <text class="node-title" x="1052" y="587">Observability</text>
+    <text class="node-text" x="1046" y="611">日志 / health</text>
+    <text class="node-text" x="1046" y="628">耗时 / token</text>
+
+    <path class="edge-strong" d="M186 140 C220 140 226 136 260 136" marker-end="url(#arrowBlue)"></path>
+    <text class="label" x="205" y="124">消息</text>
+    <path class="edge" d="M186 300 C228 300 220 152 260 152" marker-end="url(#arrow)"></path>
+    <text class="label" x="205" y="230">due event</text>
+    <path class="edge" d="M186 460 C226 460 220 166 260 166" marker-end="url(#arrow)"></path>
+
+    <path class="edge-strong" d="M434 136 C466 136 480 152 512 152" marker-end="url(#arrowBlue)"></path>
+    <text class="label" x="448" y="126">用户事件</text>
+    <path class="edge" d="M347 182 L347 236" marker-end="url(#arrow)"></path>
+    <path class="edge-strong" d="M434 282 C466 282 480 156 512 156" marker-end="url(#arrowBlue)"></path>
+    <text class="label" x="448" y="238">排队输入</text>
+
+    <path class="edge-task" d="M702 314 C736 314 748 140 782 140" marker-end="url(#arrowTask)"></path>
+    <text class="label" x="716" y="218">主节点开任务</text>
+    <path class="edge-task" d="M867 186 L867 238" marker-end="url(#arrowTask)"></path>
+    <path class="edge-task" d="M867 330 L867 382" marker-end="url(#arrowTask)"></path>
+    <path class="edge-task" d="M867 330 L867 526" marker-end="url(#arrowTask)"></path>
+
+    <path class="edge-task" d="M782 428 C686 428 530 428 434 428" marker-end="url(#arrowTask)"></path>
+    <text class="label" x="574" y="414">结构化任务结果</text>
+    <path class="edge-task" d="M782 572 C682 572 532 446 434 446" marker-end="url(#arrowTask)"></path>
+    <path class="edge-strong" d="M434 428 C466 428 480 178 512 178" marker-end="url(#arrowBlue)"></path>
+    <text class="label" x="448" y="404">主节点读取/解释</text>
+
+    <path class="edge-strong" d="M607 210 L607 262" marker-end="url(#arrowBlue)"></path>
+    <path class="edge-muted" d="M607 368 L607 420" marker-end="url(#arrow)"></path>
+    <path class="edge-strong" d="M607 526 L607 582" marker-end="url(#arrowBlue)"></path>
+    <path class="edge-strong" d="M512 620 C380 620 120 610 120 498" marker-end="url(#arrowBlue)"></path>
+    <text class="label" x="220" y="604">主节点决定微信通知</text>
+
+    <path class="edge-muted" d="M434 136 C650 56 844 66 1028 128" marker-end="url(#arrow)"></path>
+    <path class="edge-muted" d="M952 140 C982 140 998 146 1028 146" marker-end="url(#arrow)"></path>
+    <path class="edge-muted" d="M952 284 C992 284 990 306 1028 306" marker-end="url(#arrow)"></path>
+    <path class="edge-muted" d="M702 152 C850 214 888 298 1028 306" marker-end="url(#arrow)"></path>
+    <path class="edge-muted" d="M702 470 C860 470 880 612 1028 612" marker-end="url(#arrow)"></path>
+    <path class="edge-muted" d="M1097 410 L1097 350" marker-end="url(#arrow)"></path>
+
+    <rect x="54" y="748" width="1112" height="42" rx="6" fill="#f8fafc" stroke="#e2e8f0"></rect>
+    <circle cx="78" cy="769" r="6" fill="#2563eb"></circle>
+    <text class="foot" x="94" y="773">蓝色：用户主对话链路；绿色：第二层任务链路；灰色虚线：状态持久化、Codex 登录态、保活和观测。主节点单飞，后台事件可合并，微信消息始终高优先级。</text>
+  </svg>
+</div>
+</body>
+</html>
