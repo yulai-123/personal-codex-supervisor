@@ -7,6 +7,7 @@ state/
 data/
 logs/
 artifacts/
+local-only/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
@@ -15,4 +16,3 @@ context_tokens.json
 node_modules/
 dist/
 coverage/
-
