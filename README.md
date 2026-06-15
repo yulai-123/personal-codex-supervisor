@@ -33,7 +33,7 @@
 
 ## 当前状态
 
-这是一个早期项目。当前已经完成 TypeScript 本地运行时骨架、SQLite migration、Event Hub、query projections、Codex runner/session registry、内部工具注册表、Supervisor runner、Worker Group，以及可启动的本地 daemon 入口。微信等外部设备插件仍在后续实现。
+这是一个早期项目。当前已经完成 TypeScript 本地运行时骨架、SQLite migration、Event Hub、query projections、Codex runner/session registry、内部工具注册表、Supervisor runner、Worker Group、可启动的本地 daemon 入口，以及内置微信 ClawBot bridge 的初版接入。
 
 已经沉淀的内容：
 
@@ -43,7 +43,10 @@
 - [主节点契约](docs/supervisor-contract.md)
 - [任务事件契约](docs/task-event-contract.md)
 - [事件中枢和调度模型](docs/queue-and-concurrency.md)
+- [微信接入方案](docs/wechat-integration-options.md)
+- [launchd 部署说明](docs/launchd.md)
 - [隐私与开源边界](docs/privacy-and-open-source.md)
+- [第三方参考说明](docs/third-party-notices.md)
 - [OpenClaw / happyclaw 参考结论](docs/references.md)
 
 ## 为什么不是直接使用 OpenClaw 或 happyclaw

@@ -10,6 +10,7 @@ export type SupervisorContextInput = {
   trigger: HubMessage;
   registry: ToolRegistry;
   session?: RegisteredSession | null;
+  handoffSummary?: unknown;
 };
 
 export function buildSupervisorPrompt(input: SupervisorContextInput): string {
@@ -44,6 +45,9 @@ ${toolProtocolSkill}
 
 Current supervisor session:
 ${JSON.stringify(input.session ?? null, null, 2)}
+
+Pending handoff summary:
+${JSON.stringify(input.handoffSummary ?? null, null, 2)}
 
 Current trigger event:
 ${JSON.stringify(input.trigger, null, 2)}

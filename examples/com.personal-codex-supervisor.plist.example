@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personal-codex-supervisor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/ABS/PATH/TO/NODE</string>
+    <string>/ABS/PATH/TO/REPO/dist/main.js</string>
+    <string>daemon</string>
+    <string>start</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/ABS/PATH/TO/REPO</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PCS_CONFIG</key>
+    <string>/ABS/PATH/TO/REPO/local-only/config.toml</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/ABS/PATH/TO/REPO/local-only/logs/daemon.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/ABS/PATH/TO/REPO/local-only/logs/daemon.err.log</string>
+</dict>
+</plist>

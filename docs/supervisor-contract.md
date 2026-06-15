@@ -57,7 +57,7 @@ task.mark_event_handled(event_id)
 
 `task.start` 不等待 Worker 完成。它写入 `command.task.start`，Worker Group 异步执行，并通过任务事件回流。
 
-`message.send_wechat` 不直接调用外部 API。它写入 `command.message.send_wechat`，由消息发送插件消费。
+`message.send_wechat` 不直接调用外部 API。它写入 `command.message.send_wechat`，由消息发送插件消费。微信插件会在设备层校验 owner allowlist；主节点不要尝试向非 owner target 发消息。
 
 工具不是通过 MCP 暴露给主节点，而是作为 prompt 中的工具列表和结构化 `toolCalls` JSON 协议提供。运行时负责执行工具并把结果回填给同一个 Codex session。
 

@@ -17,7 +17,7 @@ export class DefaultEventRouter implements EventRouter {
       groups.add("wechat_sender_group");
     }
 
-    if (message.type === "event.wechat.message_received") {
+    if (message.type === "event.wechat.message_received" || message.type === "event.user.message_received") {
       groups.add("supervisor_group");
     }
 
@@ -41,6 +41,10 @@ export class DefaultEventRouter implements EventRouter {
 
     if (message.type.startsWith("command.monitor.") || message.type.startsWith("event.monitor.")) {
       groups.add("monitor_group");
+    }
+
+    if (message.type.startsWith("command.cleanup.") || message.type.startsWith("event.cleanup.")) {
+      groups.add("cleanup_group");
     }
 
     if (message.type === "event.task.failed" || message.type === "event.task.needs_decision") {

@@ -89,6 +89,60 @@ describe("supervisor and worker agents", () => {
     }
   });
 
+  it("uses pending handoff summaries when creating a new supervisor session", async () => {
+    const db = createMigratedTestDatabase("pcs-agent-supervisor-handoff-");
+    const runner = new SequenceRunner(["No user-visible action needed."]);
+
+    try {
+      db.prepare(`
+        INSERT INTO session_handoffs (
+          id, logical_name, status, summary_json, requested_at, archived_at, created_at, updated_at
+        ) VALUES (
+          'handoff_1',
+          'wechat_main',
+          'archived',
+          '{"generatedBy":"maintenance","nextSupervisorInstructions":["resume carefully"]}',
+          '2026-06-15T00:00:00.000Z',
+          '2026-06-15T00:00:00.000Z',
+          '2026-06-15T00:00:00.000Z',
+          '2026-06-15T00:00:00.000Z'
+        )
+      `).run();
+      appendHubMessage(db, {
+        kind: "event",
+        type: "event.wechat.message_received",
+        source: "wechat",
+        payload: {
+          text: "hello",
+        },
+      });
+
+      const result = await runConsumerOnce(db, {
+        groupId: "supervisor_group",
+        handler: createSupervisorHandler({
+          db,
+          runner,
+          projectRoot: process.cwd(),
+          logicalName: "wechat_main",
+        }),
+        leaseMs: 60_000,
+        maxAttempts: 3,
+        workerId: "supervisor-handoff-test",
+      });
+
+      expect(result).toEqual({ claimed: 1, acked: 1, failed: 0 });
+      expect(runner.prompts[0]!.prompt).toContain("Pending handoff summary");
+      expect(runner.prompts[0]!.prompt).toContain("resume carefully");
+      expect(db.prepare("SELECT status, new_session_id FROM session_handoffs WHERE id = 'handoff_1'").get())
+        .toMatchObject({
+          status: "activated",
+          new_session_id: expect.stringMatching(/^session_/),
+        });
+    } finally {
+      db.close();
+    }
+  });
+
   it("runs a worker command and records terminal task state", async () => {
     const db = createMigratedTestDatabase("pcs-agent-worker-");
     const runner = new SequenceRunner([

@@ -16,6 +16,12 @@ describe("loadConfig", () => {
       bypassApprovalsAndSandbox: true,
       maxToolIterations: 4,
     });
+    expect(loaded.config.logging.level).toBe("info");
+    expect(loaded.config.plugins.scheduler.enabled).toBe(true);
+    expect(loaded.config.plugins.wechat.enabled).toBe(false);
+    expect(loaded.config.plugins.wechat.ownerUserIds).toEqual([]);
+    expect(loaded.config.plugins.wechat.clawbotStateDir).toBe(join(projectRoot, "local-only/wechat-clawbot"));
+    expect(loaded.config.sidecars.cleanup.ackedDeliveryRetentionMs).toBe(604_800_000);
     expect(loaded.config.paths.databasePath).toBe(join(projectRoot, "local-only/state/app.sqlite"));
   });
 
@@ -34,6 +40,17 @@ describe("loadConfig", () => {
         [codex]
         model = "gpt-test"
         max_tool_iterations = 2
+
+        [plugins.scheduler]
+        monitor_interval_ms = 1000
+
+        [plugins.wechat]
+        adapter = "clawbot"
+        owner_user_ids = ["owner-test"]
+        clawbot_state_dir = "wechat-state"
+
+        [sidecars.cleanup]
+        acked_delivery_retention_ms = 1000
       `,
     );
 
@@ -43,6 +60,25 @@ describe("loadConfig", () => {
     expect(loaded.config.workers.concurrency).toBe(3);
     expect(loaded.config.codex.model).toBe("gpt-test");
     expect(loaded.config.codex.maxToolIterations).toBe(2);
+    expect(loaded.config.plugins.scheduler.monitorIntervalMs).toBe(1000);
+    expect(loaded.config.plugins.wechat.adapter).toBe("clawbot");
+    expect(loaded.config.plugins.wechat.ownerUserIds).toEqual(["owner-test"]);
+    expect(loaded.config.plugins.wechat.clawbotStateDir).toBe(join(projectRoot, "wechat-state"));
+    expect(loaded.config.sidecars.cleanup.ackedDeliveryRetentionMs).toBe(1000);
     expect(loaded.config.paths.databasePath).toBe(join(projectRoot, "state/test.sqlite"));
+  });
+
+  it("requires owner ids when WeChat is enabled", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "pcs-config-wechat-"));
+    const configPath = join(projectRoot, "config.toml");
+    writeFileSync(
+      configPath,
+      `
+        [plugins.wechat]
+        enabled = true
+      `,
+    );
+
+    expect(() => loadConfig({ projectRoot, configPath })).toThrow(/owner_user_ids/);
   });
 });

@@ -154,6 +154,10 @@ task.report_progress -> event.task.progress_updated
 task.needs_decision -> event.task.needs_decision
 ```
 
+微信 receiver/sender 是外部设备驱动。receiver 在写入 `event.wechat.message_received` 前必须校验 owner allowlist；非 owner 消息只记录脱敏拒绝事件，不进入 Supervisor。
+
+当前微信驱动是内置 `clawbot` bridge：扫码登录后在本地 ignored state 中保存账号凭证，daemon 启动后长轮询微信消息，并通过 Event Hub 与内核通信。
+
 ## 实现边界
 
 第一版实现仍然是本地单进程 daemon + SQLite WAL + launchd。架构上保留 consumer group、lease、ack、retry 和 projection，但不引入分布式消息队列。

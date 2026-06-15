@@ -21,6 +21,9 @@ const configSchema = z.object({
     defaultLeaseMs: z.number().int().positive(),
     maxAttempts: z.number().int().positive(),
   }),
+  logging: z.object({
+    level: z.enum(["debug", "info", "warn", "error"]),
+  }),
   codex: z.object({
     executable: z.string().min(1),
     model: z.string().min(1).optional(),
@@ -35,10 +38,41 @@ const configSchema = z.object({
     concurrency: z.number().int().positive(),
   }),
   plugins: z.object({
+    scheduler: z.object({
+      enabled: z.boolean(),
+      monitorIntervalMs: z.number().int().positive(),
+      cleanupIntervalMs: z.number().int().positive(),
+      handoffCheckIntervalMs: z.number().int().positive(),
+    }),
     wechat: z.object({
       enabled: z.boolean(),
+      adapter: z.enum(["stdout", "clawbot"]),
+      ownerUserIds: z.array(z.string().min(1)),
+      clawbotStateDir: z.string().min(1),
+      accountId: z.string().min(1).optional(),
+      senderConcurrency: z.number().int().positive(),
     }),
   }),
+  sidecars: z.object({
+    maintenance: z.object({
+      enabled: z.boolean(),
+    }),
+    monitor: z.object({
+      enabled: z.boolean(),
+    }),
+    cleanup: z.object({
+      enabled: z.boolean(),
+      ackedDeliveryRetentionMs: z.number().int().positive(),
+    }),
+  }),
+}).superRefine((config, ctx) => {
+  if (config.plugins.wechat.enabled && config.plugins.wechat.ownerUserIds.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["plugins", "wechat", "ownerUserIds"],
+      message: "plugins.wechat.owner_user_ids must contain at least one owner when WeChat is enabled",
+    });
+  }
 });
 
 const defaultConfig: AppConfig = {
@@ -58,6 +92,9 @@ const defaultConfig: AppConfig = {
     defaultLeaseMs: 300_000,
     maxAttempts: 5,
   },
+  logging: {
+    level: "info",
+  },
   codex: {
     executable: "codex",
     model: undefined,
@@ -72,8 +109,31 @@ const defaultConfig: AppConfig = {
     concurrency: 5,
   },
   plugins: {
+    scheduler: {
+      enabled: true,
+      monitorIntervalMs: 60_000,
+      cleanupIntervalMs: 3_600_000,
+      handoffCheckIntervalMs: 60_000,
+    },
     wechat: {
       enabled: false,
+      adapter: "stdout",
+      ownerUserIds: [],
+      clawbotStateDir: "local-only/wechat-clawbot",
+      accountId: undefined,
+      senderConcurrency: 1,
+    },
+  },
+  sidecars: {
+    maintenance: {
+      enabled: true,
+    },
+    monitor: {
+      enabled: true,
+    },
+    cleanup: {
+      enabled: true,
+      ackedDeliveryRetentionMs: 7 * 24 * 60 * 60 * 1_000,
     },
   },
 };
@@ -100,6 +160,13 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
       ...parsedRaw.codex,
       model: parsedRaw.codex.model,
     },
+    plugins: {
+      ...parsedRaw.plugins,
+      wechat: {
+        ...parsedRaw.plugins.wechat,
+        accountId: parsedRaw.plugins.wechat.accountId,
+      },
+    },
   };
 
   return {
@@ -113,6 +180,14 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
 function resolveConfigPaths(config: AppConfig, projectRoot: string): AppConfig {
   return {
     ...config,
+    plugins: {
+      ...config.plugins,
+      wechat: {
+        ...config.plugins.wechat,
+        clawbotStateDir: resolve(projectRoot, config.plugins.wechat.clawbotStateDir),
+        accountId: config.plugins.wechat.accountId,
+      },
+    },
     paths: {
       stateDir: resolve(projectRoot, config.paths.stateDir),
       logsDir: resolve(projectRoot, config.paths.logsDir),

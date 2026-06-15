@@ -329,8 +329,9 @@ export function createSupervisorToolRegistry(): ToolRegistry {
         doNotUseWhen: [
           "writing an internal note to the event log is enough",
           "a worker wants to talk to the user directly; workers must report to Supervisor instead",
+          "sending to anyone other than the configured owner",
         ],
-        returns: "accepted metadata including commandMessageId; send result arrives later from the message plugin",
+        returns: "accepted metadata including commandMessageId; send result arrives later from the message plugin; target authorization is enforced by the WeChat device layer",
         exampleInput: {
           text: "我已经启动后台任务，会在有结果后通知你。",
         },
@@ -350,6 +351,149 @@ export function createSupervisorToolRegistry(): ToolRegistry {
           },
         }, { ...(notifier ? { notifier } : {}) });
         return { accepted: true, commandMessageId: result.message.id };
+      },
+    })
+    .register({
+      name: "schedule.create",
+      description: "Create a persistent scheduled Event Hub event.",
+      riskLevel: "write",
+      usage: {
+        useWhen: [
+          "the user wants a reminder or repeated background trigger",
+          "the system should append an Event Hub event at a future time",
+        ],
+        doNotUseWhen: [
+          "the task should start immediately; use task.start",
+          "the schedule requires real-world external credentials or unsupported calendar sync",
+        ],
+        returns: "created scheduled job id and next run timestamp",
+        exampleInput: {
+          name: "daily_project_check",
+          scheduleType: "daily",
+          timeOfDay: "09:00",
+          eventType: "event.user.message_received",
+          topic: "user",
+          payload: {
+            channel: "schedule",
+            text: "Run the daily project health check.",
+          },
+        },
+      },
+      inputSchema: z.object({
+        name: z.string().min(1),
+        scheduleType: z.enum(["interval", "daily", "once"]),
+        intervalMs: z.number().int().positive().optional(),
+        timeOfDay: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        runAt: z.string().datetime().optional(),
+        timezone: z.string().optional(),
+        eventType: z.string().regex(/^event\./),
+        topic: z.string().optional(),
+        payload: z.record(z.string(), z.unknown()).optional(),
+        priority: z.number().int().positive().optional(),
+      }),
+      handler: ({ db }, input) => {
+        const jobId = createId("job");
+        const now = nowIso();
+        const nextRunAt = computeScheduleNextRun(input, now);
+        db.prepare(`
+          INSERT INTO scheduled_jobs (
+            id, name, enabled, schedule_type, interval_ms, time_of_day, timezone,
+            next_run_at, event_type, topic, payload_json, priority, created_at, updated_at
+          ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          jobId,
+          input.name,
+          input.scheduleType,
+          input.intervalMs ?? null,
+          input.timeOfDay ?? null,
+          input.timezone ?? "UTC",
+          nextRunAt,
+          input.eventType,
+          input.topic ?? inferScheduleTopic(input.eventType),
+          stringifyJson(input.payload ?? {}),
+          input.priority ?? 300,
+          now,
+          now,
+        );
+        return {
+          jobId,
+          name: input.name,
+          nextRunAt,
+        };
+      },
+    })
+    .register({
+      name: "schedule.list",
+      description: "List persistent scheduled jobs.",
+      riskLevel: "read",
+      usage: {
+        useWhen: [
+          "the user asks what reminders or scheduled jobs exist",
+          "the Supervisor needs to avoid creating duplicate schedules",
+        ],
+        doNotUseWhen: [
+          "looking for active worker tasks; use task.list_active",
+        ],
+        returns: "scheduled job rows ordered by next run time",
+        exampleInput: {
+          includeDisabled: false,
+          limit: 20,
+        },
+      },
+      inputSchema: z.object({
+        includeDisabled: z.boolean().optional(),
+        limit: z.number().int().positive().max(100).optional(),
+      }),
+      handler: ({ db }, input) => {
+        if (input.includeDisabled) {
+          return db.prepare(`
+            SELECT *
+            FROM scheduled_jobs
+            ORDER BY next_run_at ASC
+            LIMIT ?
+          `).all(input.limit ?? 20);
+        }
+        return db.prepare(`
+          SELECT *
+          FROM scheduled_jobs
+          WHERE enabled = 1
+          ORDER BY next_run_at ASC
+          LIMIT ?
+        `).all(input.limit ?? 20);
+      },
+    })
+    .register({
+      name: "schedule.cancel",
+      description: "Disable a persistent scheduled job.",
+      riskLevel: "write",
+      usage: {
+        useWhen: [
+          "the user cancels a reminder or repeated scheduled trigger",
+          "a schedule is obsolete or duplicated",
+        ],
+        doNotUseWhen: [
+          "the user wants to stop an active worker task; use task.cancel",
+        ],
+        returns: "whether a scheduled job was disabled",
+        exampleInput: {
+          jobId: "job_example",
+        },
+      },
+      inputSchema: z.object({
+        jobId: z.string().min(1),
+      }),
+      handler: ({ db }, input) => {
+        const now = nowIso();
+        const result = db.prepare(`
+          UPDATE scheduled_jobs
+          SET enabled = 0,
+              updated_at = ?
+          WHERE id = ?
+        `).run(now, input.jobId);
+        return {
+          cancelled: result.changes > 0,
+          jobId: input.jobId,
+        };
       },
     })
     .register({
@@ -386,4 +530,82 @@ export function createSupervisorToolRegistry(): ToolRegistry {
 export function readTaskContext(db: AppDatabase, taskId: string): Record<string, unknown> {
   const row = db.prepare("SELECT context_json FROM tasks WHERE id = ?").get(taskId) as { context_json: string } | undefined;
   return row ? parseJsonObject(row.context_json) : {};
+}
+
+type ScheduleCreateInput = {
+  scheduleType: "interval" | "daily" | "once";
+  intervalMs?: number | undefined;
+  timeOfDay?: string | undefined;
+  runAt?: string | undefined;
+  timezone?: string | undefined;
+};
+
+function computeScheduleNextRun(input: ScheduleCreateInput, nowIsoText: string): string {
+  const now = new Date(nowIsoText);
+  if (input.scheduleType === "interval") {
+    if (!input.intervalMs) {
+      throw new Error("interval schedules require intervalMs");
+    }
+    return new Date(now.getTime() + input.intervalMs).toISOString();
+  }
+  if (input.scheduleType === "once") {
+    if (!input.runAt) {
+      throw new Error("once schedules require runAt");
+    }
+    return input.runAt;
+  }
+  if (!input.timeOfDay) {
+    throw new Error("daily schedules require timeOfDay");
+  }
+  return nextDailyRunAfter(now, input.timeOfDay, input.timezone ?? "UTC").toISOString();
+}
+
+function nextDailyRunAfter(now: Date, timeOfDay: string, timezone: string): Date {
+  const local = getLocalDateTime(now, timezone);
+  const [hourText, minuteText] = timeOfDay.split(":");
+  const targetMinutes = Number(hourText) * 60 + Number(minuteText);
+  const addDays = local.minutesSinceMidnight < targetMinutes ? 0 : 1;
+  const targetUtcMs = Date.UTC(local.year, local.month - 1, local.day + addDays, 0, targetMinutes);
+  return new Date(targetUtcMs - local.offsetMinutes * 60_000);
+}
+
+function getLocalDateTime(
+  now: Date,
+  timezone: string,
+): { year: number; month: number; day: number; minutesSinceMidnight: number; offsetMinutes: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "shortOffset",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "0";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    minutesSinceMidnight: Number(get("hour")) * 60 + Number(get("minute")),
+    offsetMinutes: parseOffsetMinutes(get("timeZoneName")),
+  };
+}
+
+function parseOffsetMinutes(value: string): number {
+  if (value === "GMT" || value === "UTC") {
+    return 0;
+  }
+  const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(value);
+  if (!match) {
+    return 0;
+  }
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3] ?? "0"));
+}
+
+function inferScheduleTopic(eventType: string): string {
+  const parts = eventType.split(".");
+  return parts.length >= 2 && parts[1] ? parts[1] : "schedule";
 }

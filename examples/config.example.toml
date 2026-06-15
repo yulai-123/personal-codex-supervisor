@@ -14,6 +14,9 @@ fallback_scan_ms = 30000
 default_lease_ms = 300000
 max_attempts = 5
 
+[logging]
+level = "info"
+
 [codex]
 executable = "codex"
 bypass_approvals_and_sandbox = true
@@ -27,5 +30,30 @@ handoff_time = "02:00"
 [workers]
 concurrency = 5
 
+[plugins.scheduler]
+enabled = true
+monitor_interval_ms = 60000
+cleanup_interval_ms = 3600000
+handoff_check_interval_ms = 60000
+
 [plugins.wechat]
 enabled = false
+adapter = "stdout"
+# Use "clawbot" for the built-in WeChat ClawBot bridge.
+# adapter = "clawbot"
+# Keep this empty in committed examples. Put your own WeChat user id in
+# local-only/config.toml before enabling a real receiver.
+owner_user_ids = []
+clawbot_state_dir = "local-only/wechat-clawbot"
+# account_id = "optional-account-id-from-wechat-status"
+sender_concurrency = 1
+
+[sidecars.maintenance]
+enabled = true
+
+[sidecars.monitor]
+enabled = true
+
+[sidecars.cleanup]
+enabled = true
+acked_delivery_retention_ms = 604800000

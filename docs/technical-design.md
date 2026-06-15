@@ -398,7 +398,7 @@ state.get_task_context
 输入插件只负责把外部输入转成 event：
 
 ```text
-wechat.receiver -> event.wechat.message_received
+wechat.receiver -> owner allowlist -> event.wechat.message_received
 cli.commands -> event.manual.command_received
 scheduler.plugin -> event.timer.due
 local.plugin -> event.local.*
@@ -409,10 +409,15 @@ local.plugin -> event.local.*
 ```text
 command.message.send_wechat
   -> wechat.sender
+  -> target allowlist
   -> event.message.sent / event.message.send_failed
 ```
 
 未来飞书、邮件、本机通知都按同样模型接入，不改变 Event Hub、Supervisor 或 Worker 的核心边界。
+
+微信是个人外部设备，不进入主流程。入站 receiver 必须先校验 `plugins.wechat.owner_user_ids`，非 owner 消息只写 `event.wechat.message_rejected`，不投递给 `supervisor_group`。出站 sender 如果收到带 `target` 的命令，也必须确认 target 属于同一个 allowlist。
+
+当前微信真实接入由内置 `clawbot` bridge 提供，不引入外部 SDK 依赖。它负责扫码登录、长轮询 `getupdates`、保存 `get_updates_buf`、提取文本/语音转文字、保存 `context_token`，并通过 `sendmessage` 发送文本回复。群聊、任意联系人主动发送和媒体收发不进入当前能力边界。
 
 ## Query Projections
 
@@ -427,6 +432,7 @@ sessions_current_state
 outbox_current_state
 recent_task_events
 system_health_current_state
+wechat_conversations
 ```
 
 Supervisor 查询任务状态时走 `task.get_status` / `task.get_result`，读取 projections，而不是向 Worker 发消息等待回复。
@@ -491,6 +497,8 @@ scheduler
 8. Session maintenance、health monitor、cleanup
 9. 测试、日志、launchd 部署说明
 ```
+
+当前实现已经包含 CLI 本地入口、持久化 scheduler jobs、wechat stdout adapter、session handoff 记录、health monitor、cleanup、JSON logger 和 launchd 模板。真实微信接入仍应通过 `WechatAdapter` 边界实现，凭据保存在 ignored 的本地配置或系统钥匙串中。不要在本项目里实现私有协议逆向或手写微信解密逻辑。
 
 ## 隐私边界
 

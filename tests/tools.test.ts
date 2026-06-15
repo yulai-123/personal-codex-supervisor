@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EventHubNotifier } from "../src/kernel/event-hub/notifier.js";
+import { runDueScheduledJobs } from "../src/plugins/scheduler/index.js";
+import { createLogger } from "../src/runtime/logger.js";
 import { createSupervisorToolRegistry } from "../src/tools/supervisor-tools.js";
 import { createWorkerToolRegistry } from "../src/tools/worker-tools.js";
 import { createMigratedTestDatabase } from "./helpers.js";
@@ -45,6 +47,49 @@ describe("internal tool registries", () => {
           { group_id: "projection_group" },
           { group_id: "worker_group" },
         ]));
+    } finally {
+      db.close();
+    }
+  });
+
+  it("lets the supervisor create persistent schedules", async () => {
+    const db = createMigratedTestDatabase("pcs-tools-schedule-");
+
+    try {
+      const registry = createSupervisorToolRegistry();
+      const result = await registry.execute(
+        { db, source: "supervisor" },
+        {
+          id: "call_1",
+          name: "schedule.create",
+          input: {
+            name: "test_once_schedule",
+            scheduleType: "once",
+            runAt: "2026-06-15T01:00:00.000Z",
+            eventType: "event.user.message_received",
+            payload: {
+              channel: "schedule",
+              text: "scheduled task",
+            },
+          },
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      const output = result.output as { jobId: string };
+      expect(db.prepare("SELECT name, event_type FROM scheduled_jobs WHERE id = ?").get(output.jobId))
+        .toMatchObject({
+          name: "test_once_schedule",
+          event_type: "event.user.message_received",
+        });
+
+      const due = runDueScheduledJobs({
+        db,
+        logger: createLogger({ level: "error" }),
+      }, new Date("2026-06-15T01:00:00.000Z"));
+      expect(due.map((item) => item.message.type)).toContain("event.user.message_received");
+      expect(db.prepare("SELECT enabled FROM scheduled_jobs WHERE id = ?").get(output.jobId))
+        .toMatchObject({ enabled: 0 });
     } finally {
       db.close();
     }

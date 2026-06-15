@@ -15,6 +15,9 @@ export type AppConfig = {
     defaultLeaseMs: number;
     maxAttempts: number;
   };
+  logging: {
+    level: "debug" | "info" | "warn" | "error";
+  };
   codex: {
     executable: string;
     model: string | undefined;
@@ -29,8 +32,31 @@ export type AppConfig = {
     concurrency: number;
   };
   plugins: {
+    scheduler: {
+      enabled: boolean;
+      monitorIntervalMs: number;
+      cleanupIntervalMs: number;
+      handoffCheckIntervalMs: number;
+    };
     wechat: {
       enabled: boolean;
+      adapter: "stdout" | "clawbot";
+      ownerUserIds: string[];
+      clawbotStateDir: string;
+      accountId: string | undefined;
+      senderConcurrency: number;
+    };
+  };
+  sidecars: {
+    maintenance: {
+      enabled: boolean;
+    };
+    monitor: {
+      enabled: boolean;
+    };
+    cleanup: {
+      enabled: boolean;
+      ackedDeliveryRetentionMs: number;
     };
   };
 };
