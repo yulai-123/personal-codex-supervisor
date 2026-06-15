@@ -285,6 +285,7 @@ Supervisor 消费：
 
 ```text
 event.wechat.message_received
+event.user.message_received
 event.task.completed
 event.task.failed
 event.task.needs_decision
@@ -400,7 +401,7 @@ state.get_task_context
 ```text
 wechat.receiver -> owner allowlist -> event.wechat.message_received
 cli.commands -> event.manual.command_received
-scheduler.plugin -> event.timer.due
+scheduler.plugin -> event.* with source=scheduler
 local.plugin -> event.local.*
 ```
 
@@ -460,6 +461,18 @@ Supervisor
   -> event.task.completed / failed / needs_decision
   -> supervisor_group
 ```
+
+### 定时触发
+
+```text
+scheduler
+  -> event.user.message_received with source=scheduler
+  -> Event Hub routes to supervisor_group
+  -> Supervisor 判断直接通知或 task.start
+  -> message.send_wechat 或 worker_group
+```
+
+复杂定时任务的 payload 应携带简短目标和 `contextRef` 等引用，由 Supervisor 传给 Worker。大段私人上下文保存在 ignored 的本地位置，不进入仓库，也不进入 Event Hub payload。
 
 ### 发送微信
 

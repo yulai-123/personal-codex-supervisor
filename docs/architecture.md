@@ -103,12 +103,15 @@ Supervisor 消费高价值事件：
 
 ```text
 event.wechat.message_received
+event.user.message_received
 event.task.completed
 event.task.failed
 event.task.needs_decision
 event.system.alert
 event.maintenance.handoff_required
 ```
+
+其中 `event.user.message_received` 既可以来自 CLI，也可以来自 scheduler。Scheduler 触发的事件会带 `source = "scheduler"` 或 `payload.channel = "schedule"`，Supervisor 先判断这是简单提醒还是需要派发 Worker 的任务。大上下文任务只在 payload 中携带 `contextRef` 等引用，不把完整私人上下文塞进 Event Hub。
 
 Supervisor 通过工具调用系统能力。读工具查 projection，写工具向 Event Hub 追加 command。
 

@@ -31,6 +31,32 @@ describe("agent prompt contracts", () => {
     }
   });
 
+  it("tells the supervisor how to handle scheduled triggers and external context references", () => {
+    const db = createMigratedTestDatabase("pcs-prompt-supervisor-schedule-");
+
+    try {
+      const prompt = buildSupervisorPrompt({
+        db,
+        trigger: createScheduledTriggerMessage(),
+        registry: createSupervisorToolRegistry(),
+        session: null,
+      });
+
+      expect(prompt).toContain("Scheduled event rules");
+      expect(prompt).toContain('source "scheduler"');
+      expect(prompt).toContain('payload.channel === "schedule"');
+      expect(prompt).toContain("Scheduled triggers still go through the Supervisor first");
+      expect(prompt).toContain("message.send_wechat directly");
+      expect(prompt).toContain('payload.executionHint === "start_worker"');
+      expect(prompt).toContain("contextRef");
+      expect(prompt).toContain('origin "scheduler"');
+      expect(prompt).toContain("local-only/schedules/class-context.md");
+      expect(prompt).toContain("task.start");
+    } finally {
+      db.close();
+    }
+  });
+
   it("tells workers how to execute, report progress, ask decisions, and finish with JSON", () => {
     const prompt = buildWorkerPrompt({
       taskId: "task_prompt_1",
@@ -71,5 +97,30 @@ function createTriggerMessage(): HubMessage {
     },
     correlationId: "evt_prompt_1",
     createdAt: "2026-06-15T00:00:00.000Z",
+  };
+}
+
+function createScheduledTriggerMessage(): HubMessage {
+  return {
+    id: "evt_prompt_schedule_1",
+    kind: "event",
+    type: "event.user.message_received",
+    topic: "user",
+    source: "scheduler",
+    priority: 300,
+    payload: {
+      channel: "schedule",
+      title: "Daily class schedule check",
+      text: "Check whether there is a class today and notify the user if needed.",
+      executionHint: "start_worker",
+      contextSize: "large",
+      contextMode: "external_ref",
+      contextRef: "local-only/schedules/class-context.md",
+      jobId: "job_prompt_schedule_1",
+      jobName: "class_schedule",
+      scheduledAt: "2026-06-15T23:35:00.000Z",
+    },
+    correlationId: "evt_prompt_schedule_1",
+    createdAt: "2026-06-15T23:35:00.000Z",
   };
 }

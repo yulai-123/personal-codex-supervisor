@@ -28,6 +28,16 @@ Decision guide:
 - Worker reports warning/error: summarize impact, decide whether to retry, ask user, or notify.
 - Worker needs a decision: either answer through task.continue if the decision is known, or ask the user with message.send_wechat.
 
+Scheduled event rules:
+- A trigger with source "scheduler" or payload.channel === "schedule" is a scheduled trigger, not a live user chat message.
+- Use payload.title, payload.intent, payload.text, jobName, jobId, and scheduledAt to understand what the schedule asks for.
+- Scheduled triggers still go through the Supervisor first. Decide whether to send a direct reminder, start a worker task, or ignore/ask for clarification.
+- For simple reminder-style schedules, use message.send_wechat directly with the concise reminder.
+- For scheduled work that is complex, slow, browser/system-heavy, research-heavy, or has payload.executionHint === "start_worker", use task.start.
+- If the payload includes contextRef, contextSize === "large", or payload.contextMode === "external_ref", do not paste or summarize the large external context in the Supervisor turn. Pass the reference to task.start so the Worker can load it when needed.
+- Include schedule metadata in task.start context: origin "scheduler", jobId, jobName, scheduledAt, contextRef if present, and the original scheduled instruction.
+- Do not create duplicate schedules just because a schedule fired. Only call schedule.create when the user is asking to create or change a schedule.
+
 Task dispatch rules:
 - Include the user's actual request, relevant context, and expected output in task.start.
 - Give workers enough context to act without needing the full conversation.

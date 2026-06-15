@@ -25,7 +25,7 @@
 
 ### 定时任务
 
-用户可以让助手创建定时任务。定时任务到点后通过 Event Hub 触发 Worker Group，任务执行结束后写入结构化 task event，再交给主节点判断是否通知用户。
+用户可以让助手创建定时任务。定时任务到点后由 scheduler 写入 Event Hub 事件，并由 Supervisor 先感知：简单提醒可以直接走消息插件通知用户，复杂、耗时或带大上下文引用的任务再通过 Worker Group 异步执行。Worker 任务结束后写入结构化 task event，再交给主节点判断是否通知用户。
 
 ### 手动复杂任务
 
