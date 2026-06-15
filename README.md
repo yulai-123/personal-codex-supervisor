@@ -33,7 +33,7 @@
 
 ## 当前状态
 
-这是一个早期项目。当前已经开始搭建 TypeScript 工程、配置加载和 SQLite migration，尚未实现完整助手 daemon。
+这是一个早期项目。当前已经完成 TypeScript 本地运行时骨架、SQLite migration、Event Hub、query projections、Codex runner/session registry、内部工具注册表、Supervisor runner、Worker Group，以及可启动的本地 daemon 入口。微信等外部设备插件仍在后续实现。
 
 已经沉淀的内容：
 

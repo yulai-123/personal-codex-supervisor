@@ -59,6 +59,8 @@ task.mark_event_handled(event_id)
 
 `message.send_wechat` 不直接调用外部 API。它写入 `command.message.send_wechat`，由消息发送插件消费。
 
+工具不是通过 MCP 暴露给主节点，而是作为 prompt 中的工具列表和结构化 `toolCalls` JSON 协议提供。运行时负责执行工具并把结果回填给同一个 Codex session。
+
 ## 行为规则
 
 - 微信用户消息是最高优先级。

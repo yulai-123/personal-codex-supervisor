@@ -350,6 +350,8 @@ Worker 不直接给用户发消息。如果需要用户确认，输出 `event.ta
 
 工具是 Codex agent 调用系统能力的入口。读工具同步查询 projections，写工具追加 command/event 到 Event Hub。
 
+当前实现不把内部工具暴露成 MCP server，而是采用 skill-like 的提示方式：运行时把可用工具列表、角色说明和结构化调用格式写进 prompt；Codex 如需调用工具，就返回 `toolCalls` JSON；运行时校验 schema、执行工具、把结果回填给同一个 Codex session 继续推理。
+
 Supervisor tools：
 
 ```text
@@ -362,20 +364,17 @@ task.list_active
 
 message.send_wechat
 
-schedule.create
-schedule.update
-schedule.cancel
-
 state.get_recent_events
 state.get_system_status
+task.mark_event_handled
 ```
 
 Worker tools：
 
 ```text
-task_event.emit
-task_event.progress
-artifact.save
+task.report_progress
+task.register_artifact
+task.needs_decision
 state.get_task_context
 ```
 

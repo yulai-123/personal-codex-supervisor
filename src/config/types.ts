@@ -15,6 +15,12 @@ export type AppConfig = {
     defaultLeaseMs: number;
     maxAttempts: number;
   };
+  codex: {
+    executable: string;
+    model: string | undefined;
+    bypassApprovalsAndSandbox: boolean;
+    maxToolIterations: number;
+  };
   supervisor: {
     logicalName: string;
     handoffTime: string;

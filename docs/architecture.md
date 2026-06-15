@@ -142,13 +142,16 @@ event.task.progress_updated
 写工具：追加 command 或 event 到 Event Hub
 ```
 
+当前内部工具采用 skill-like 机制提供给 Codex：prompt 中包含工具列表、角色规则和结构化 `toolCalls` JSON 格式；运行时负责 schema 校验、执行工具并把工具结果回填到同一 Codex session。这里暂不需要 MCP。
+
 例如：
 
 ```text
 task.get_status -> 读 projection
 task.start -> command.task.start
 message.send_wechat -> command.message.send_wechat
-task_event.emit -> event.task.completed / failed / needs_decision
+task.report_progress -> event.task.progress_updated
+task.needs_decision -> event.task.needs_decision
 ```
 
 ## 实现边界

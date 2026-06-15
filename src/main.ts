@@ -5,6 +5,7 @@ import type { LoadedConfig } from "./config/types.js";
 import { openDatabase } from "./storage/sqlite.js";
 import { getMigrationStatus, runMigrations } from "./storage/migrations.js";
 import { asError } from "./shared/errors.js";
+import { runRuntimeDaemon } from "./runtime/daemon.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -65,6 +66,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (domain === "daemon" && action === "start") {
+    const loaded = loadConfig();
+    const controller = new AbortController();
+    const stop = (signalName: NodeJS.Signals) => {
+      console.log(`Received ${signalName}; stopping runtime daemon...`);
+      controller.abort();
+    };
+
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+
+    await runRuntimeDaemon({ loaded, signal: controller.signal });
+    return;
+  }
+
   throw new Error(`Unknown command: ${args.join(" ")}`);
 }
 
@@ -74,6 +90,8 @@ function printHelp(): void {
 Usage:
   pnpm db:migrate       Apply SQLite migrations
   pnpm db:status        Show migration status
+  pnpm dev -- daemon start
+                       Start supervisor, worker, and projection consumer loops
   pnpm config:show      Print resolved configuration with sensitive keys redacted
   pnpm typecheck        Run TypeScript type checks
   pnpm test             Run tests

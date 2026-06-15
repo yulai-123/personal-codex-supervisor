@@ -12,6 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
+    "daemon": "node dist/main.js daemon start",
+    "dev:daemon": "tsx src/main.ts daemon start",
     "db:migrate": "tsx src/main.ts db migrate",
     "db:status": "tsx src/main.ts db status",
     "config:show": "tsx src/main.ts config show",

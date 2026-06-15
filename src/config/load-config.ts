@@ -21,6 +21,12 @@ const configSchema = z.object({
     defaultLeaseMs: z.number().int().positive(),
     maxAttempts: z.number().int().positive(),
   }),
+  codex: z.object({
+    executable: z.string().min(1),
+    model: z.string().min(1).optional(),
+    bypassApprovalsAndSandbox: z.boolean(),
+    maxToolIterations: z.number().int().nonnegative(),
+  }),
   supervisor: z.object({
     logicalName: z.string().min(1),
     handoffTime: z.string().regex(/^\d{2}:\d{2}$/),
@@ -52,6 +58,12 @@ const defaultConfig: AppConfig = {
     defaultLeaseMs: 300_000,
     maxAttempts: 5,
   },
+  codex: {
+    executable: "codex",
+    model: undefined,
+    bypassApprovalsAndSandbox: true,
+    maxToolIterations: 4,
+  },
   supervisor: {
     logicalName: "wechat_main",
     handoffTime: "02:00",
@@ -81,7 +93,14 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
     ? normalizeKeys(parseToml(readFileSync(configPath, "utf8")))
     : {};
   const merged = mergeDeep(defaultConfig, fileConfig);
-  const parsed = configSchema.parse(merged);
+  const parsedRaw = configSchema.parse(merged);
+  const parsed: AppConfig = {
+    ...parsedRaw,
+    codex: {
+      ...parsedRaw.codex,
+      model: parsedRaw.codex.model,
+    },
+  };
 
   return {
     config: resolveConfigPaths(parsed, projectRoot),
