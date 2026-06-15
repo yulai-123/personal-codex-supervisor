@@ -110,6 +110,38 @@ describe("plugins", () => {
     }
   });
 
+  it("scheduler reseeds system job next runs when timezone changes", () => {
+    const db = createMigratedTestDatabase("pcs-plugin-scheduler-reseed-");
+
+    try {
+      seedSystemScheduledJobs(db, {
+        timezone: "UTC",
+        handoffTime: "02:00",
+        monitorIntervalMs: 60_000,
+        cleanupIntervalMs: 60_000,
+        now: new Date("2026-06-15T01:00:00.000Z"),
+      });
+      seedSystemScheduledJobs(db, {
+        timezone: "Asia/Shanghai",
+        handoffTime: "02:00",
+        monitorIntervalMs: 60_000,
+        cleanupIntervalMs: 60_000,
+        now: new Date("2026-06-15T01:00:00.000Z"),
+      });
+
+      expect(db.prepare(`
+        SELECT timezone, next_run_at
+        FROM scheduled_jobs
+        WHERE name = 'system.maintenance.handoff_required'
+      `).get()).toMatchObject({
+        timezone: "Asia/Shanghai",
+        next_run_at: "2026-06-15T18:00:00.000Z",
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it("wechat sender turns outbound commands into sent events", async () => {
     const db = createMigratedTestDatabase("pcs-plugin-wechat-");
     const adapter = new FakeWechatAdapter();

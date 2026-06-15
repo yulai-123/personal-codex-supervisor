@@ -216,6 +216,7 @@ function upsertSystemJob(db: AppDatabase, input: UpsertSystemJobInput): void {
       time_of_day = excluded.time_of_day,
       schedule_value = excluded.schedule_value,
       timezone = excluded.timezone,
+      next_run_at = excluded.next_run_at,
       event_type = excluded.event_type,
       topic = excluded.topic,
       payload_json = excluded.payload_json,
