@@ -18,11 +18,15 @@ describe("SQLite migrations", () => {
       const table = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
         .get("event_log") as { name: string } | undefined;
+      const projectionTable = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get("tasks_current_state") as { name: string } | undefined;
 
-      expect(first.applied).toHaveLength(1);
+      expect(first.applied.length).toBeGreaterThanOrEqual(1);
       expect(second.applied).toHaveLength(0);
       expect(status.every((item) => item.status === "applied")).toBe(true);
       expect(table?.name).toBe("event_log");
+      expect(projectionTable?.name).toBe("tasks_current_state");
     } finally {
       db.close();
     }
