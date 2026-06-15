@@ -12,7 +12,7 @@ happyclaw 提供了很多值得参考的实现经验：
 - scheduled task 的 `group` / `isolated` 上下文模式。
 - 通过虚拟 JID 隔离主会话、子会话、定时任务。
 
-但它的能力增长后形成了很多并列功能，缺少一个足够清晰的“主节点 Supervisor + 第二层任务节点”的统一抽象。
+但它的能力增长后形成了很多并列功能，缺少一个足够清晰的“主节点 Supervisor + Worker Group”的统一抽象。
 
 本项目不打算 fork happyclaw 做裁剪，而是吸收它的经验后重新收敛。
 
@@ -47,4 +47,3 @@ Subagents + Router + Custom workflow
 ```
 
 不太像 Handoffs。因为用户始终面对同一个微信主助手，第二层任务不直接和用户长期对话。
-

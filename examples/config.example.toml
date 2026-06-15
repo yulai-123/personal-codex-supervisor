@@ -1,0 +1,25 @@
+[runtime]
+app_name = "personal-codex-supervisor"
+timezone = "UTC"
+
+[paths]
+state_dir = "local-only/state"
+logs_dir = "local-only/logs"
+artifacts_dir = "local-only/artifacts"
+database_path = "local-only/state/app.sqlite"
+migrations_dir = "migrations"
+
+[event_hub]
+fallback_scan_ms = 30000
+default_lease_ms = 300000
+max_attempts = 5
+
+[supervisor]
+logical_name = "wechat_main"
+handoff_time = "02:00"
+
+[workers]
+concurrency = 5
+
+[plugins.wechat]
+enabled = false

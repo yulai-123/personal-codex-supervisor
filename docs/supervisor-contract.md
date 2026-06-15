@@ -7,7 +7,8 @@
 ```text
 你是个人 Codex 助手的主节点 Supervisor。
 你负责理解用户、维护对话连续性、管理任务、决定是否通知用户。
-你不是 Worker。复杂、耗时、可并发、需要大量工具执行的工作应该派发到第二层任务。
+你运行在长期 Codex session 中，拥有工具调用能力。
+你不是 Worker。复杂、耗时、可并发、需要大量工具执行的工作应该通过工具派发到 Worker Group。
 ```
 
 ## 每轮输入
@@ -21,36 +22,54 @@
 4. 最近需要决策的任务事件
 5. 用户刚在微信看到的任务结果
 6. 可用工具列表
+7. 系统健康摘要
+8. 当前主 session 信息
 ```
 
 这不是“重建最近对话”，而是动态系统状态。
 
 ## 主节点工具
 
-建议工具面保持很小：
+主节点工具分为读工具和写工具。
+
+读工具查询 projection，不进入 Event Hub：
 
 ```text
-start_task(objective, priority, context, expected_output)
-continue_task(task_id, instruction)
-get_task_status(task_id)
-get_task_result(task_id, detail_level)
-list_active_tasks(filter)
-schedule_task(spec)
-cancel_task(task_id)
-mark_task_event_handled(event_id)
-send_wechat_message(text)
+task.get_status(task_id)
+task.get_result(task_id, detail_level)
+task.list_active(filter)
+state.get_recent_events(filter)
+state.get_system_status()
 ```
+
+写工具追加 command 到 Event Hub，并立即返回 accepted 结果：
+
+```text
+task.start(objective, priority, context, expected_output)
+task.continue(task_id, instruction)
+task.cancel(task_id)
+schedule.create(spec)
+schedule.update(schedule_id, patch)
+schedule.cancel(schedule_id)
+message.send_wechat(text)
+task.mark_event_handled(event_id)
+```
+
+`task.start` 不等待 Worker 完成。它写入 `command.task.start`，Worker Group 异步执行，并通过任务事件回流。
+
+`message.send_wechat` 不直接调用外部 API。它写入 `command.message.send_wechat`，由消息发送插件消费。
 
 ## 行为规则
 
 - 微信用户消息是最高优先级。
 - 每轮只处理当前最高优先级事件。
 - 能短答就短答。
-- 复杂执行必须派发任务。
+- 复杂执行必须通过 `task.start` 派发到 Worker Group。
 - 不要轮询等待任务完成。
 - 对用户可见的普通业务消息必须由主节点统一判断后发送。
 - 任务结果如果不重要，可以只记录不通知。
 - 对多个低价值任务结果，可以合并成摘要。
+- 处理完需要确认的任务事件后，应该标记事件已处理。
 
 ## 主节点 session 维护
 
@@ -59,10 +78,9 @@ send_wechat_message(text)
 ```text
 1. 当前主节点生成 handoff summary。
 2. 记录活跃任务、长期偏好、未完成事项、近期关键上下文。
-3. 创建新的 wechat_main Codex session。
+3. 创建新的主 Codex session。
 4. 用 handoff summary 作为新 session 的起始上下文。
 5. 旧 session 归档。
 ```
 
 这个机制不是日常拼接聊天历史，而是低频换线。
-
