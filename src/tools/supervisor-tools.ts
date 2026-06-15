@@ -1,3 +1,4 @@
+import { CronExpressionParser } from "cron-parser";
 import { z } from "zod";
 import { appendHubMessage } from "../kernel/event-hub/append.js";
 import { createId } from "../shared/ids.js";
@@ -5,6 +6,8 @@ import { parseJsonObject, stringifyJson } from "../shared/json.js";
 import { nowIso } from "../shared/time.js";
 import type { AppDatabase } from "../storage/sqlite.js";
 import { ToolRegistry } from "./registry.js";
+
+const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Shanghai";
 
 export function createSupervisorToolRegistry(): ToolRegistry {
   return new ToolRegistry()
@@ -369,8 +372,9 @@ export function createSupervisorToolRegistry(): ToolRegistry {
         returns: "created scheduled job id and next run timestamp",
         exampleInput: {
           name: "daily_project_check",
-          scheduleType: "daily",
-          timeOfDay: "09:00",
+          scheduleType: "cron",
+          scheduleValue: "0 9 * * *",
+          timezone: "Asia/Shanghai",
           eventType: "event.user.message_received",
           topic: "user",
           payload: {
@@ -381,9 +385,10 @@ export function createSupervisorToolRegistry(): ToolRegistry {
       },
       inputSchema: z.object({
         name: z.string().min(1),
-        scheduleType: z.enum(["interval", "daily", "once"]),
+        scheduleType: z.enum(["interval", "daily", "once", "cron"]),
         intervalMs: z.number().int().positive().optional(),
         timeOfDay: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        scheduleValue: z.string().min(1).optional(),
         runAt: z.string().datetime().optional(),
         timezone: z.string().optional(),
         eventType: z.string().regex(/^event\./),
@@ -397,16 +402,17 @@ export function createSupervisorToolRegistry(): ToolRegistry {
         const nextRunAt = computeScheduleNextRun(input, now);
         db.prepare(`
           INSERT INTO scheduled_jobs (
-            id, name, enabled, schedule_type, interval_ms, time_of_day, timezone,
+            id, name, enabled, schedule_type, interval_ms, time_of_day, schedule_value, timezone,
             next_run_at, event_type, topic, payload_json, priority, created_at, updated_at
-          ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           jobId,
           input.name,
           input.scheduleType,
           input.intervalMs ?? null,
           input.timeOfDay ?? null,
-          input.timezone ?? "UTC",
+          input.scheduleValue ?? defaultScheduleValue(input),
+          input.timezone ?? DEFAULT_SCHEDULE_TIMEZONE,
           nextRunAt,
           input.eventType,
           input.topic ?? inferScheduleTopic(input.eventType),
@@ -533,9 +539,10 @@ export function readTaskContext(db: AppDatabase, taskId: string): Record<string,
 }
 
 type ScheduleCreateInput = {
-  scheduleType: "interval" | "daily" | "once";
+  scheduleType: "interval" | "daily" | "once" | "cron";
   intervalMs?: number | undefined;
   timeOfDay?: string | undefined;
+  scheduleValue?: string | undefined;
   runAt?: string | undefined;
   timezone?: string | undefined;
 };
@@ -554,10 +561,39 @@ function computeScheduleNextRun(input: ScheduleCreateInput, nowIsoText: string):
     }
     return input.runAt;
   }
+  if (input.scheduleType === "cron") {
+    if (!input.scheduleValue) {
+      throw new Error("cron schedules require scheduleValue");
+    }
+    return nextCronRunAfter(now, input.scheduleValue, input.timezone ?? DEFAULT_SCHEDULE_TIMEZONE).toISOString();
+  }
   if (!input.timeOfDay) {
     throw new Error("daily schedules require timeOfDay");
   }
-  return nextDailyRunAfter(now, input.timeOfDay, input.timezone ?? "UTC").toISOString();
+  return nextDailyRunAfter(now, input.timeOfDay, input.timezone ?? DEFAULT_SCHEDULE_TIMEZONE).toISOString();
+}
+
+function nextCronRunAfter(now: Date, expression: string, timezone: string): Date {
+  return CronExpressionParser.parse(expression, {
+    currentDate: now,
+    tz: timezone,
+  }).next().toDate();
+}
+
+function defaultScheduleValue(input: ScheduleCreateInput): string | null {
+  if (input.scheduleValue !== undefined) {
+    return input.scheduleValue;
+  }
+  if (input.scheduleType === "interval" && input.intervalMs !== undefined) {
+    return String(input.intervalMs);
+  }
+  if (input.scheduleType === "daily" && input.timeOfDay !== undefined) {
+    return input.timeOfDay;
+  }
+  if (input.scheduleType === "once" && input.runAt !== undefined) {
+    return input.runAt;
+  }
+  return null;
 }
 
 function nextDailyRunAfter(now: Date, timeOfDay: string, timezone: string): Date {

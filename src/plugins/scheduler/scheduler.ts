@@ -1,3 +1,4 @@
+import { CronExpressionParser } from "cron-parser";
 import { appendHubMessage, type AppendHubMessageResult } from "../../kernel/event-hub/index.js";
 import type { EventHubNotifier } from "../../kernel/event-hub/notifier.js";
 import { createId } from "../../shared/ids.js";
@@ -169,9 +170,10 @@ export function runDueScheduledJobs(
 
 type UpsertSystemJobInput = {
   name: string;
-  scheduleType: "interval" | "daily" | "once";
+  scheduleType: ScheduleType;
   intervalMs?: number;
   timeOfDay?: string;
+  scheduleValue?: string;
   timezone: string;
   nextRunAt: string;
   eventType: string;
@@ -184,9 +186,10 @@ type ScheduledJobRow = {
   id: string;
   name: string;
   enabled: number;
-  schedule_type: "interval" | "daily" | "once";
+  schedule_type: ScheduleType;
   interval_ms: number | null;
   time_of_day: string | null;
+  schedule_value: string | null;
   timezone: string;
   next_run_at: string;
   event_type: string;
@@ -197,18 +200,21 @@ type ScheduledJobRow = {
   updated_at: string;
 };
 
+type ScheduleType = "interval" | "daily" | "once" | "cron";
+
 function upsertSystemJob(db: AppDatabase, input: UpsertSystemJobInput): void {
   const now = new Date().toISOString();
   db.prepare(`
     INSERT INTO scheduled_jobs (
-      id, name, enabled, schedule_type, interval_ms, time_of_day, timezone,
+      id, name, enabled, schedule_type, interval_ms, time_of_day, schedule_value, timezone,
       next_run_at, event_type, topic, payload_json, priority, created_at, updated_at
-    ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(name) DO UPDATE SET
       enabled = 1,
       schedule_type = excluded.schedule_type,
       interval_ms = excluded.interval_ms,
       time_of_day = excluded.time_of_day,
+      schedule_value = excluded.schedule_value,
       timezone = excluded.timezone,
       event_type = excluded.event_type,
       topic = excluded.topic,
@@ -221,6 +227,7 @@ function upsertSystemJob(db: AppDatabase, input: UpsertSystemJobInput): void {
     input.scheduleType,
     input.intervalMs ?? null,
     input.timeOfDay ?? null,
+    input.scheduleValue ?? defaultScheduleValue(input),
     input.timezone,
     input.nextRunAt,
     input.eventType,
@@ -244,9 +251,7 @@ function updateNextRun(db: AppDatabase, row: ScheduledJobRow, now: Date): void {
     return;
   }
 
-  const nextRunAt = row.schedule_type === "daily"
-    ? nextDailyRunAfter(now, row.time_of_day ?? "00:00", row.timezone).toISOString()
-    : nextIntervalRunAfter(row.next_run_at, row.interval_ms ?? 60_000, now).toISOString();
+  const nextRunAt = computeNextRunAfter(row, now).toISOString();
 
   db.prepare(`
     UPDATE scheduled_jobs
@@ -262,6 +267,40 @@ function nextIntervalRunAfter(previousRunAt: string, intervalMs: number, now: Da
     next = new Date(next.getTime() + intervalMs);
   }
   return next;
+}
+
+function nextCronRunAfter(expression: string, timezone: string, now: Date): Date {
+  return CronExpressionParser.parse(expression, {
+    currentDate: now,
+    tz: timezone,
+  }).next().toDate();
+}
+
+function computeNextRunAfter(row: ScheduledJobRow, now: Date): Date {
+  if (row.schedule_type === "daily") {
+    return nextDailyRunAfter(now, row.time_of_day ?? row.schedule_value ?? "00:00", row.timezone);
+  }
+  if (row.schedule_type === "cron") {
+    if (!row.schedule_value) {
+      throw new Error(`cron schedule ${row.name} is missing schedule_value`);
+    }
+    return nextCronRunAfter(row.schedule_value, row.timezone, now);
+  }
+  const intervalMs = row.interval_ms ?? Number(row.schedule_value ?? "");
+  return nextIntervalRunAfter(row.next_run_at, Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60_000, now);
+}
+
+function defaultScheduleValue(input: UpsertSystemJobInput): string | null {
+  if (input.scheduleValue !== undefined) {
+    return input.scheduleValue;
+  }
+  if (input.scheduleType === "interval" && input.intervalMs !== undefined) {
+    return String(input.intervalMs);
+  }
+  if (input.scheduleType === "daily" && input.timeOfDay !== undefined) {
+    return input.timeOfDay;
+  }
+  return null;
 }
 
 function nextDailyRunAfter(now: Date, timeOfDay: string, timezone: string): Date {

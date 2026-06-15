@@ -95,6 +95,46 @@ describe("internal tool registries", () => {
     }
   });
 
+  it("lets the supervisor create cron schedules with Shanghai as the default timezone", async () => {
+    const db = createMigratedTestDatabase("pcs-tools-schedule-cron-");
+
+    try {
+      const registry = createSupervisorToolRegistry();
+      const result = await registry.execute(
+        { db, source: "supervisor" },
+        {
+          id: "call_1",
+          name: "schedule.create",
+          input: {
+            name: "drink_water",
+            scheduleType: "cron",
+            scheduleValue: "5 9,12,15,18,21 * * *",
+            eventType: "event.user.message_received",
+            payload: {
+              channel: "schedule",
+              text: "remind me to drink water",
+            },
+          },
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      const output = result.output as { jobId: string };
+      expect(db.prepare(`
+        SELECT schedule_type, schedule_value, timezone, event_type
+        FROM scheduled_jobs
+        WHERE id = ?
+      `).get(output.jobId)).toMatchObject({
+        schedule_type: "cron",
+        schedule_value: "5 9,12,15,18,21 * * *",
+        timezone: "Asia/Shanghai",
+        event_type: "event.user.message_received",
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it("lets workers report progress and request supervisor decisions", async () => {
     const db = createMigratedTestDatabase("pcs-tools-worker-");
 

@@ -71,6 +71,45 @@ describe("plugins", () => {
     }
   });
 
+  it("scheduler advances cron jobs using the configured timezone", () => {
+    const db = createMigratedTestDatabase("pcs-plugin-scheduler-cron-");
+
+    try {
+      db.prepare(`
+        INSERT INTO scheduled_jobs (
+          id, name, enabled, schedule_type, schedule_value, timezone,
+          next_run_at, event_type, topic, payload_json, priority, created_at, updated_at
+        ) VALUES (
+          'job_drink_water', 'drink_water', 1, 'cron', '5 9,12,15,18,21 * * *', 'Asia/Shanghai',
+          '2026-06-15T10:05:00.000Z', 'event.user.message_received', 'user',
+          '{"channel":"schedule","text":"drink water"}', 300,
+          '2026-06-15T00:00:00.000Z', '2026-06-15T00:00:00.000Z'
+        )
+      `).run();
+
+      const results = runDueScheduledJobs({
+        db,
+        logger: createLogger({ level: "error" }),
+      }, new Date("2026-06-15T10:05:00.000Z"));
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.message).toMatchObject({
+        type: "event.user.message_received",
+        source: "scheduler",
+      });
+      expect(results[0]?.message.payload).toMatchObject({
+        channel: "schedule",
+        text: "drink water",
+        jobName: "drink_water",
+        scheduledAt: "2026-06-15T10:05:00.000Z",
+      });
+      expect(db.prepare("SELECT next_run_at FROM scheduled_jobs WHERE id = 'job_drink_water'").get())
+        .toMatchObject({ next_run_at: "2026-06-15T13:05:00.000Z" });
+    } finally {
+      db.close();
+    }
+  });
+
   it("wechat sender turns outbound commands into sent events", async () => {
     const db = createMigratedTestDatabase("pcs-plugin-wechat-");
     const adapter = new FakeWechatAdapter();
