@@ -18,12 +18,14 @@ export type AttentionSidecarOptions = {
 };
 
 export function createAttentionSidecar(options: AttentionSidecarOptions): RuntimeComponent {
+  const intervalMs = getAttentionLoopIntervalMs(options.config);
+
   return {
     name: "assistant_attention",
     start: async (signal) => {
       runAttentionTick(options, new Date());
       while (!signal.aborted) {
-        const result = await sleep(options.config.attention.intervalMs, signal);
+        const result = await sleep(intervalMs, signal);
         if (result === "aborted") {
           return;
         }
@@ -31,6 +33,10 @@ export function createAttentionSidecar(options: AttentionSidecarOptions): Runtim
       }
     },
   };
+}
+
+export function getAttentionLoopIntervalMs(config: AssistantRuntimeConfig): number {
+  return Math.min(config.attention.intervalMs, config.attention.urgentIntervalMs);
 }
 
 export function runAttentionTick(options: AttentionSidecarOptions, now: Date): AppendHubMessageResult[] {

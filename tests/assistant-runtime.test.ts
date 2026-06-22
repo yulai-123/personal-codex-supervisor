@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createLogger } from "../src/runtime/logger.js";
-import { runAttentionTick } from "../src/attention/index.js";
+import { getAttentionLoopIntervalMs, runAttentionTick } from "../src/attention/index.js";
 import type { AssistantRuntimeConfig } from "../src/assistant/index.js";
 import { createSupervisorToolRegistry } from "../src/tools/supervisor-tools.js";
 import { createMigratedTestDatabase } from "./helpers.js";
@@ -143,6 +143,10 @@ describe("assistant runtime", () => {
     } finally {
       db.close();
     }
+  });
+
+  it("uses the shorter configured attention interval for the runtime loop", () => {
+    expect(getAttentionLoopIntervalMs(testAssistantConfig("/tmp/assistant"))).toBe(15 * 60 * 1_000);
   });
 });
 
