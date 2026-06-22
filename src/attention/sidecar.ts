@@ -1,10 +1,4 @@
-import {
-  loadAssistantSignalStandards,
-  type AssistantRuntimeConfig,
-  type AssistantSignalStandard,
-  type AssistantStateStatus,
-  type AssistantStateView,
-} from "../assistant/index.js";
+import { loadAssistantSignalStandards, type AssistantRuntimeConfig } from "../assistant/index.js";
 import { getDueAssistantFollowups, listAssistantState, markAssistantFollowupTriggered } from "../assistant/state.js";
 import { appendHubMessage, type AppendHubMessageResult } from "../kernel/event-hub/index.js";
 import type { EventHubNotifier } from "../kernel/event-hub/notifier.js";
@@ -79,7 +73,7 @@ export function runAttentionTick(options: AttentionSidecarOptions, now: Date): A
     listAssistantState(options.db, { limit: 500, now: nowIso })
       .map((state) => [`${state.capabilityId}:${state.key}`, state]),
   );
-  const dueByCapability = new Map<string, DueAttentionSignal[]>();
+  const requestedCapabilities = new Set<string>();
 
   for (const standard of standards) {
     const state = currentState.get(`${standard.capabilityId}:${standard.key}`);
@@ -94,19 +88,9 @@ export function runAttentionTick(options: AttentionSidecarOptions, now: Date): A
       continue;
     }
 
-    const items = dueByCapability.get(standard.capabilityId) ?? [];
-    items.push({ standard, state, stateStatus });
-    dueByCapability.set(standard.capabilityId, items);
-  }
-
-  for (const [capabilityId, signals] of dueByCapability) {
-    if (signals.length === 0) {
-      continue;
-    }
-    const priority = Math.min(...signals.map((signal) => signal.standard.priority));
     const gate = evaluateAttentionGate(options.db, {
-      capabilityId,
-      priority,
+      capabilityId: standard.capabilityId,
+      priority: standard.priority,
       now,
       timezone: options.timezone,
       maxDailyMessages: options.config.attention.maxDailyMessages,
@@ -117,34 +101,39 @@ export function runAttentionTick(options: AttentionSidecarOptions, now: Date): A
 
     if (!gate.allowed) {
       options.logger.debug("assistant attention suppressed", {
-        capabilityId,
-        keys: signals.map((signal) => signal.standard.key),
+        capabilityId: standard.capabilityId,
+        key: standard.key,
         reason: gate.reason,
       });
       continue;
     }
 
-    const primary = signals[0]!;
+    if (requestedCapabilities.has(standard.capabilityId)) {
+      continue;
+    }
+    requestedCapabilities.add(standard.capabilityId);
 
     results.push(appendHubMessage(options.db, {
       kind: "event",
       type: "event.assistant.attention_requested",
       source: "assistant_attention",
       topic: "assistant",
-      priority,
+      priority: standard.priority,
       payload: {
-        capabilityId,
-        reason: primary.state ? "state_stale" : "state_unknown",
-        signal: toPayloadSignal(primary),
-        signals: signals.map(toPayloadSignal),
-        observedState: primary.state ?? null,
-        observedStates: signals.map((signal) => ({
-          key: signal.standard.key,
-          state: signal.state ?? null,
-        })),
+        capabilityId: standard.capabilityId,
+        reason: state ? "state_stale" : "state_unknown",
+        signal: {
+          key: standard.key,
+          label: standard.label,
+          status: stateStatus,
+          askStyle: standard.askStyle,
+          priority: standard.priority,
+          naturalWindows: standard.naturalWindows,
+        },
+        observedState: state ?? null,
         gateReason: gate.reason,
       },
-      dedupeKey: `assistant.attention:${capabilityId}:${attentionKey(signals)}:${attentionBucket(now)}`,
+      dedupeKey: `assistant.attention:${standard.capabilityId}:${standard.key}:${attentionBucket(now)}`,
     }, appendOptions(options)));
   }
 
@@ -161,27 +150,6 @@ export function runAttentionTick(options: AttentionSidecarOptions, now: Date): A
 function attentionBucket(now: Date): string {
   const bucketMs = 30 * 60 * 1_000;
   return String(Math.floor(now.getTime() / bucketMs));
-}
-
-type DueAttentionSignal = {
-  standard: AssistantSignalStandard;
-  state: AssistantStateView | undefined;
-  stateStatus: AssistantStateStatus;
-};
-
-function toPayloadSignal(signal: DueAttentionSignal) {
-  return {
-    key: signal.standard.key,
-    label: signal.standard.label,
-    status: signal.stateStatus,
-    askStyle: signal.standard.askStyle,
-    priority: signal.standard.priority,
-    naturalWindows: signal.standard.naturalWindows,
-  };
-}
-
-function attentionKey(signals: DueAttentionSignal[]): string {
-  return signals.map((signal) => signal.standard.key).join("+");
 }
 
 function unknownLongEnough(updatedAt: string, now: Date, maxUnknownHours: number): boolean {
