@@ -5,7 +5,6 @@ import { createId } from "../../shared/ids.js";
 import { parseJsonObject } from "../../shared/json.js";
 import type { AppDatabase } from "../../storage/sqlite.js";
 import type { CodexRunner } from "../../codex/runner.js";
-import type { AssistantRuntimeConfig } from "../../assistant/types.js";
 import { SessionRegistry } from "../../codex/session-registry.js";
 import { createSupervisorToolRegistry } from "../../tools/supervisor-tools.js";
 import { runCodexToolLoop } from "../tool-loop.js";
@@ -20,7 +19,6 @@ export type SupervisorRunnerOptions = {
   env?: Record<string, string | undefined>;
   maxToolIterations?: number;
   notifier?: EventHubNotifier;
-  assistantConfig?: AssistantRuntimeConfig;
 };
 
 export function createSupervisorHandler(options: SupervisorRunnerOptions): ConsumerHandler {
@@ -35,9 +33,7 @@ export async function runSupervisorTurn(
 ): Promise<void> {
   const logicalName = options.logicalName ?? "wechat_main";
   const registry = new SessionRegistry(options.db);
-  const toolRegistry = createSupervisorToolRegistry({
-    ...(options.assistantConfig ? { assistantConfig: options.assistantConfig } : {}),
-  });
+  const toolRegistry = createSupervisorToolRegistry();
   const existingSession = registry.getActive(logicalName, "supervisor");
   const pendingHandoff = existingSession ? null : getPendingHandoff(options.db, logicalName);
   const prompt = buildSupervisorPrompt({
@@ -45,7 +41,6 @@ export async function runSupervisorTurn(
     trigger: delivery.message,
     registry: toolRegistry,
     session: existingSession,
-    ...(options.assistantConfig ? { assistantConfig: options.assistantConfig } : {}),
     ...(pendingHandoff ? { handoffSummary: pendingHandoff.summary } : {}),
   });
 

@@ -4,7 +4,6 @@ import { formatToolListForPrompt, type ToolRegistry } from "../../tools/registry
 import { formatToolCallInstructions } from "../../tools/tool-call-parser.js";
 import type { HubMessage } from "../../kernel/event-hub/types.js";
 import { supervisorOperatingSkill, toolProtocolSkill } from "../skills/index.js";
-import { loadAssistantPromptContext, listAssistantState, type AssistantRuntimeConfig } from "../../assistant/index.js";
 
 export type SupervisorContextInput = {
   db: AppDatabase;
@@ -12,7 +11,6 @@ export type SupervisorContextInput = {
   registry: ToolRegistry;
   session?: RegisteredSession | null;
   handoffSummary?: unknown;
-  assistantConfig?: AssistantRuntimeConfig;
 };
 
 export function buildSupervisorPrompt(input: SupervisorContextInput): string {
@@ -39,30 +37,6 @@ export function buildSupervisorPrompt(input: SupervisorContextInput): string {
     LIMIT 10
   `).all();
 
-  const assistantContext = input.assistantConfig
-    ? loadAssistantPromptContext(input.assistantConfig)
-    : null;
-  const assistantState = input.assistantConfig?.enabled
-    ? listAssistantState(input.db, { limit: 50 })
-    : [];
-  const dueAssistantFollowups = input.assistantConfig?.enabled
-    ? input.db.prepare(`
-        SELECT id, capability_id, purpose, due_at, status, priority, payload_json, updated_at
-        FROM assistant_followups
-        WHERE status IN ('pending', 'triggered')
-        ORDER BY due_at ASC, priority ASC
-        LIMIT 20
-      `).all()
-    : [];
-  const todayAssistantInterventions = input.assistantConfig?.enabled
-    ? input.db.prepare(`
-        SELECT id, capability_id, action, status, reason, state_tags_json, created_at
-        FROM assistant_interventions
-        ORDER BY created_at DESC
-        LIMIT 20
-      `).all()
-    : [];
-
   return `${supervisorOperatingSkill}
 
 ${toolProtocolSkill}
@@ -87,40 +61,8 @@ ${JSON.stringify(recentDecisionEvents, null, 2)}
 System health:
 ${JSON.stringify(systemHealth, null, 2)}
 
-Assistant runtime:
-${formatAssistantRuntimeContext({
-  context: assistantContext,
-  state: assistantState,
-  followups: dueAssistantFollowups,
-  interventions: todayAssistantInterventions,
-})}
-
 Available internal tools:
 ${formatToolListForPrompt(input.registry)}
 
 ${formatToolCallInstructions()}`;
-}
-
-function formatAssistantRuntimeContext(input: {
-  context: unknown;
-  state: unknown[];
-  followups: unknown[];
-  interventions: unknown[];
-}): string {
-  if (!input.context || (typeof input.context === "object" && input.context !== null && "enabled" in input.context && input.context.enabled === false)) {
-    return "Assistant runtime is disabled or no private assistant context is configured.";
-  }
-
-  return JSON.stringify({
-    context: input.context,
-    currentState: input.state,
-    activeFollowups: input.followups,
-    recentInterventions: input.interventions,
-    operatingNote: [
-      "There is only one user-facing assistant: the Supervisor uses the global persona plus enabled capabilities.",
-      "Enabled capabilities should preserve uncertainty: unknown is not a failure and silence is not evidence.",
-      "For assistant attention/follow-up triggers, decide whether to stay silent, record, ask, remind, start a task, or create follow-up.",
-      "Record observations and interventions with assistant.* tools when useful.",
-    ],
-  }, null, 2);
 }

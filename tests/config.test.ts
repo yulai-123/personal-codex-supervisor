@@ -21,9 +21,6 @@ describe("loadConfig", () => {
     expect(loaded.config.plugins.wechat.enabled).toBe(false);
     expect(loaded.config.plugins.wechat.ownerUserIds).toEqual([]);
     expect(loaded.config.plugins.wechat.clawbotStateDir).toBe(join(projectRoot, "local-only/wechat-clawbot"));
-    expect(loaded.config.assistant.enabled).toBe(false);
-    expect(loaded.config.assistant.configDir).toBe(join(projectRoot, "local-only/assistant"));
-    expect(loaded.config.assistant.attention.intervalMs).toBe(1_800_000);
     expect(loaded.config.sidecars.cleanup.ackedDeliveryRetentionMs).toBe(604_800_000);
     expect(loaded.config.paths.databasePath).toBe(join(projectRoot, "local-only/state/app.sqlite"));
   });
@@ -47,15 +44,6 @@ describe("loadConfig", () => {
         [plugins.scheduler]
         monitor_interval_ms = 1000
 
-        [assistant]
-        enabled = true
-        config_dir = "assistant-private"
-
-        [assistant.attention]
-        enabled = true
-        interval_ms = 900000
-        quiet_hours = ["01:00-07:30"]
-
         [plugins.wechat]
         adapter = "clawbot"
         owner_user_ids = ["owner-test"]
@@ -73,11 +61,6 @@ describe("loadConfig", () => {
     expect(loaded.config.codex.model).toBe("gpt-test");
     expect(loaded.config.codex.maxToolIterations).toBe(2);
     expect(loaded.config.plugins.scheduler.monitorIntervalMs).toBe(1000);
-    expect(loaded.config.assistant.enabled).toBe(true);
-    expect(loaded.config.assistant.configDir).toBe(join(projectRoot, "assistant-private"));
-    expect(loaded.config.assistant.attention.enabled).toBe(true);
-    expect(loaded.config.assistant.attention.intervalMs).toBe(900_000);
-    expect(loaded.config.assistant.attention.quietHours).toEqual(["01:00-07:30"]);
     expect(loaded.config.plugins.wechat.adapter).toBe("clawbot");
     expect(loaded.config.plugins.wechat.ownerUserIds).toEqual(["owner-test"]);
     expect(loaded.config.plugins.wechat.clawbotStateDir).toBe(join(projectRoot, "wechat-state"));
