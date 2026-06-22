@@ -66,29 +66,10 @@ function loadCapabilities(config: AssistantRuntimeConfig): AssistantCapabilityCo
         id: capabilityId,
         skill: readTextIfExists(join(capabilityDir, "SKILL.md"), config.maxPromptChars),
         serviceStandards: readTextIfExists(join(capabilityDir, "service-standards.toml"), config.maxPromptChars),
-        memory: readCapabilityMemory(capabilityDir, config.maxPromptChars),
+        memory: readTextIfExists(join(capabilityDir, "memory.md"), config.maxPromptChars),
       };
     })
     .filter((item) => item.skill || item.serviceStandards || item.memory);
-}
-
-function readCapabilityMemory(capabilityDir: string, maxChars: number): string | null {
-  const memoryFiles: Array<[string, string]> = [
-    ["memory.md", "Manual memory"],
-    ["memory.generated.md", "Generated memory"],
-  ];
-  const parts = memoryFiles.flatMap(([fileName, label]) => {
-    const text = readTextIfExists(join(capabilityDir, fileName), maxChars);
-    return text ? [`## ${label}\n\n${text}`] : [];
-  });
-  if (parts.length === 0) {
-    return null;
-  }
-  const text = parts.join("\n\n");
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n[assistant memory truncated at ${maxChars} chars]`;
 }
 
 function readTextIfExists(path: string, maxChars: number): string | null {
