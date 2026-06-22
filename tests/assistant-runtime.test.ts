@@ -115,6 +115,14 @@ describe("assistant runtime", () => {
         natural_windows = ["12:00-14:30"]
         priority = 35
         ask_style = "concrete_check"
+
+        [[signals]]
+        key = "example.energy_check"
+        label = "Energy check"
+        max_unknown_hours = 6
+        natural_windows = ["12:00-14:30"]
+        priority = 45
+        ask_style = "soft_check"
       `,
     );
 
@@ -139,6 +147,10 @@ describe("assistant runtime", () => {
           key: "example.midday_check",
           status: "unknown",
         },
+        signals: [
+          expect.objectContaining({ key: "example.midday_check", status: "unknown" }),
+          expect.objectContaining({ key: "example.energy_check", status: "unknown" }),
+        ],
       });
     } finally {
       db.close();
