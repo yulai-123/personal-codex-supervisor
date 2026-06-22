@@ -1,3 +1,5 @@
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { loadAssistantPromptContext, type AssistantRuntimeConfig } from "../assistant/index.js";
 import {
@@ -7,6 +9,7 @@ import {
   markAssistantStateUnknown,
   recordAssistantIntervention,
   recordAssistantObservation,
+  upsertAssistantDailySummary,
 } from "../assistant/state.js";
 import type { ToolRegistry } from "./registry.js";
 
@@ -244,5 +247,87 @@ export function registerAssistantSupervisorTools(registry: ToolRegistry, options
         completed: completeAssistantFollowup(db, input.followupId),
         followupId: input.followupId,
       }),
+    })
+    .register({
+      name: "assistant.daily_summary.upsert",
+      description: "Create or update a private assistant daily summary in SQLite.",
+      riskLevel: "write",
+      usage: {
+        useWhen: [
+          "the assistant is consolidating a day of observations into a compact private summary",
+          "a daily or weekly review needs stable structured memory without editing files",
+        ],
+        returns: "daily summary id",
+        exampleInput: {
+          capabilityId: "default",
+          localDate: "2026-06-22",
+          summary: "User reported a mixed day with sleep debt but completed dinner and a short walk.",
+        },
+      },
+      inputSchema: z.object({
+        capabilityId: z.string().min(1).optional(),
+        localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        summary: z.string().min(1),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+      handler: ({ db }, input) => upsertAssistantDailySummary(db, {
+        capabilityId: input.capabilityId ?? DEFAULT_CAPABILITY_ID,
+        localDate: input.localDate,
+        summary: input.summary,
+        metadata: input.metadata ?? {},
+      }),
+    })
+    .register({
+      name: "assistant.memory.append",
+      description: "Append generated private assistant memory to local-only assistant memory files.",
+      riskLevel: "write",
+      usage: {
+        useWhen: [
+          "a weekly or explicit memory consolidation found stable user preferences or patterns",
+          "the assistant should preserve learned private context across future Supervisor turns",
+        ],
+        doNotUseWhen: [
+          "the information is a one-off dynamic state; use assistant.observation.record instead",
+          "the information is uncertain or based only on user silence",
+        ],
+        returns: "path and appended timestamp",
+        exampleInput: {
+          capabilityId: "default",
+          heading: "Weekly pattern",
+          text: "User tends to recover better after concrete cleanup actions than vague short tidying.",
+        },
+      },
+      inputSchema: z.object({
+        capabilityId: z.string().min(1).optional(),
+        heading: z.string().min(1).max(120).optional(),
+        text: z.string().min(1),
+      }),
+      handler: (_context, input) => {
+        if (!options.assistantConfig?.enabled) {
+          throw new Error("assistant runtime is disabled");
+        }
+
+        const capabilityId = input.capabilityId ?? DEFAULT_CAPABILITY_ID;
+        assertSafeCapabilityId(capabilityId);
+        const capabilityDir = join(options.assistantConfig.configDir, "capabilities", capabilityId);
+        mkdirSync(capabilityDir, { recursive: true });
+        const path = join(capabilityDir, "memory.generated.md");
+        const appendedAt = new Date().toISOString();
+        const heading = input.heading ? `### ${input.heading}` : "### Generated memory";
+        appendFileSync(path, `\n\n${heading}\n\nRecorded at: ${appendedAt}\n\n${input.text.trim()}\n`, {
+          encoding: "utf8",
+          mode: 0o600,
+        });
+        return {
+          path,
+          appendedAt,
+        };
+      },
     });
+}
+
+function assertSafeCapabilityId(capabilityId: string): void {
+  if (!/^[a-zA-Z0-9_.-]+$/.test(capabilityId)) {
+    throw new Error("capabilityId may only contain letters, numbers, dots, underscores, and dashes");
+  }
 }

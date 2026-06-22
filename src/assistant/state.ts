@@ -64,6 +64,13 @@ export type AssistantFollowupInput = {
   priority?: number;
 };
 
+export type AssistantDailySummaryInput = {
+  capabilityId: string;
+  localDate: string;
+  summary: string;
+  metadata?: Record<string, unknown>;
+};
+
 export function recordAssistantObservation(db: AppDatabase, input: AssistantObservationInput): {
   observationId: string;
   state: AssistantStateView;
@@ -236,6 +243,39 @@ export function completeAssistantFollowup(db: AppDatabase, followupId: string): 
       AND status IN ('pending', 'triggered')
   `).run(now, now, followupId);
   return result.changes > 0;
+}
+
+export function upsertAssistantDailySummary(db: AppDatabase, input: AssistantDailySummaryInput): {
+  summaryId: string;
+} {
+  const now = nowIso();
+  const existing = db.prepare(`
+    SELECT id
+    FROM assistant_daily_summaries
+    WHERE capability_id = ?
+      AND local_date = ?
+  `).get(input.capabilityId, input.localDate) as { id: string } | undefined;
+  const summaryId = existing?.id ?? createId("asst_summary");
+
+  db.prepare(`
+    INSERT INTO assistant_daily_summaries (
+      id, capability_id, local_date, summary, metadata_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(capability_id, local_date) DO UPDATE SET
+      summary = excluded.summary,
+      metadata_json = excluded.metadata_json,
+      updated_at = excluded.updated_at
+  `).run(
+    summaryId,
+    input.capabilityId,
+    input.localDate,
+    input.summary,
+    stringifyJson(input.metadata ?? {}),
+    now,
+    now,
+  );
+
+  return { summaryId };
 }
 
 export function getDueAssistantFollowups(db: AppDatabase, now: string, limit = 10): Array<{

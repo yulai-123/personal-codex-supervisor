@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,6 +66,8 @@ describe("assistant runtime", () => {
     writeFileSync(join(configDir, "persona.md"), "A private global persona placeholder.");
     writeFileSync(join(configDir, "profile.md"), "A private user profile placeholder.");
     writeFileSync(join(configDir, "capabilities/default/SKILL.md"), "Handle a private capability.");
+    writeFileSync(join(configDir, "capabilities/default/memory.md"), "Stable manual memory.");
+    writeFileSync(join(configDir, "capabilities/default/memory.generated.md"), "Generated learned memory.");
 
     try {
       const registry = createSupervisorToolRegistry({
@@ -83,6 +85,11 @@ describe("assistant runtime", () => {
       );
 
       expect(result.ok).toBe(true);
+      const output = result.output as {
+        context: {
+          capabilities: Array<{ memory: string }>;
+        };
+      };
       expect(result.output).toMatchObject({
         context: {
           enabled: true,
@@ -92,9 +99,56 @@ describe("assistant runtime", () => {
             {
               id: "default",
               skill: "Handle a private capability.",
+              memory: expect.stringContaining("Stable manual memory."),
             },
           ],
         },
+      });
+      expect(output.context.capabilities[0]?.memory).toContain("Generated learned memory.");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("can store daily summaries and append generated private memory", async () => {
+    const db = createMigratedTestDatabase("pcs-assistant-memory-");
+    const configDir = mkdtempSync(join(tmpdir(), "pcs-assistant-memory-config-"));
+
+    try {
+      const registry = createSupervisorToolRegistry({
+        assistantConfig: testAssistantConfig(configDir),
+      });
+      const summary = await registry.execute(
+        { db, source: "supervisor" },
+        {
+          id: "call_1",
+          name: "assistant.daily_summary.upsert",
+          input: {
+            capabilityId: "default",
+            localDate: "2026-06-22",
+            summary: "A compact private day summary.",
+          },
+        },
+      );
+      const memory = await registry.execute(
+        { db, source: "supervisor" },
+        {
+          id: "call_2",
+          name: "assistant.memory.append",
+          input: {
+            capabilityId: "default",
+            heading: "Weekly pattern",
+            text: "A stable private learned pattern.",
+          },
+        },
+      );
+
+      expect(summary.ok).toBe(true);
+      expect(memory.ok).toBe(true);
+      expect(readFileSync(join(configDir, "capabilities/default/memory.generated.md"), "utf8"))
+        .toContain("A stable private learned pattern.");
+      expect(db.prepare("SELECT summary FROM assistant_daily_summaries").get()).toEqual({
+        summary: "A compact private day summary.",
       });
     } finally {
       db.close();
