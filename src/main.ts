@@ -265,6 +265,10 @@ function toDisplayConfig(loaded: LoadedConfig): LoadedConfig {
           clawbotStateDir: formatPath(loaded.config.plugins.wechat.clawbotStateDir, loaded.projectRoot),
         },
       },
+      assistant: {
+        ...loaded.config.assistant,
+        configDir: formatPath(loaded.config.assistant.configDir, loaded.projectRoot),
+      },
       paths: {
         stateDir: formatPath(loaded.config.paths.stateDir, loaded.projectRoot),
         logsDir: formatPath(loaded.config.paths.logsDir, loaded.projectRoot),

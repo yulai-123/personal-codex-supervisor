@@ -1,0 +1,22 @@
+# Assistant Capability Example
+
+Keep real capability instructions in `local-only/assistant/capabilities/<capability-id>/SKILL.md`.
+
+This file defines one private assistant capability. The committed example is intentionally generic.
+
+Guidance:
+
+- Describe what this capability is responsible for.
+- Describe when it should ask, stay silent, record state, create a follow-up, or start a task.
+- Keep private preferences, personal routines, names, locations, relationship details, and raw conversations out of committed files.
+- The capability is not a separate user-facing assistant. The Supervisor remains the single outward voice.
+
+Possible actions:
+
+- `silence`
+- `record`
+- `ask`
+- `remind`
+- `follow_up`
+- `task`
+- `schedule`

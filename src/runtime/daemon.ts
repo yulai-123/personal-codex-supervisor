@@ -5,6 +5,7 @@ import type { LoadedConfig } from "../config/types.js";
 import { EventHubNotifier } from "../kernel/event-hub/notifier.js";
 import { projectMessage } from "../kernel/projections/projector.js";
 import { createSchedulerComponent } from "../plugins/scheduler/index.js";
+import { createAttentionSidecar } from "../attention/index.js";
 import {
   ClawbotWechatAdapter,
   HttpClawbotClient,
@@ -72,6 +73,7 @@ export async function runRuntimeDaemon(options: RuntimeDaemonOptions): Promise<v
           ...(config.codex.model ? { model: config.codex.model } : {}),
           maxToolIterations: config.codex.maxToolIterations,
           notifier,
+          assistantConfig: config.assistant,
         }),
       }),
       createConsumerComponent(db, {
@@ -100,6 +102,16 @@ export async function runRuntimeDaemon(options: RuntimeDaemonOptions): Promise<v
         monitorIntervalMs: config.plugins.scheduler.monitorIntervalMs,
         cleanupIntervalMs: config.plugins.scheduler.cleanupIntervalMs,
         handoffCheckIntervalMs: config.plugins.scheduler.handoffCheckIntervalMs,
+      }));
+    }
+
+    if (config.assistant.enabled && config.assistant.attention.enabled) {
+      components.push(createAttentionSidecar({
+        db,
+        config: config.assistant,
+        timezone: config.runtime.timezone,
+        logger: logger.child({ component: "assistant_attention" }),
+        notifier,
       }));
     }
 

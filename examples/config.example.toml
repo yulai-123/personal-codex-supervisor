@@ -30,6 +30,20 @@ handoff_time = "02:00"
 [workers]
 concurrency = 5
 
+[assistant]
+enabled = false
+config_dir = "local-only/assistant"
+max_prompt_chars = 12000
+
+[assistant.attention]
+enabled = false
+interval_ms = 1800000
+urgent_interval_ms = 900000
+max_daily_messages = 5
+min_minutes_between_messages = 60
+unanswered_backoff_ms = 7200000
+quiet_hours = ["00:30-08:30"]
+
 [plugins.scheduler]
 enabled = true
 monitor_interval_ms = 60000

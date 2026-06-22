@@ -35,6 +35,10 @@ export class DefaultEventRouter implements EventRouter {
       groups.add("maintenance_group");
     }
 
+    if (message.type === "event.assistant.attention_requested" || message.type === "event.assistant.followup_due") {
+      groups.add("supervisor_group");
+    }
+
     if (message.type.startsWith("command.maintenance.") || message.type.startsWith("event.maintenance.")) {
       groups.add("maintenance_group");
     }

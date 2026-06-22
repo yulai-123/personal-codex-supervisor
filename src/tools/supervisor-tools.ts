@@ -5,12 +5,18 @@ import { createId } from "../shared/ids.js";
 import { parseJsonObject, stringifyJson } from "../shared/json.js";
 import { nowIso } from "../shared/time.js";
 import type { AppDatabase } from "../storage/sqlite.js";
+import type { AssistantRuntimeConfig } from "../assistant/types.js";
+import { registerAssistantSupervisorTools } from "./assistant-tools.js";
 import { ToolRegistry } from "./registry.js";
 
 const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Shanghai";
 
-export function createSupervisorToolRegistry(): ToolRegistry {
-  return new ToolRegistry()
+export type SupervisorToolRegistryOptions = {
+  assistantConfig?: AssistantRuntimeConfig;
+};
+
+export function createSupervisorToolRegistry(options: SupervisorToolRegistryOptions = {}): ToolRegistry {
+  const registry = new ToolRegistry()
     .register({
       name: "task.start",
       description: "Start an asynchronous worker task. Returns accepted metadata immediately; does not wait for completion.",
@@ -531,6 +537,10 @@ export function createSupervisorToolRegistry(): ToolRegistry {
         };
       },
     });
+
+  return registerAssistantSupervisorTools(registry, {
+    ...(options.assistantConfig ? { assistantConfig: options.assistantConfig } : {}),
+  });
 }
 
 export function readTaskContext(db: AppDatabase, taskId: string): Record<string, unknown> {

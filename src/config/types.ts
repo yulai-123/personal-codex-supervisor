@@ -31,6 +31,20 @@ export type AppConfig = {
   workers: {
     concurrency: number;
   };
+  assistant: {
+    enabled: boolean;
+    configDir: string;
+    maxPromptChars: number;
+    attention: {
+      enabled: boolean;
+      intervalMs: number;
+      urgentIntervalMs: number;
+      maxDailyMessages: number;
+      minMinutesBetweenMessages: number;
+      unansweredBackoffMs: number;
+      quietHours: string[];
+    };
+  };
   plugins: {
     scheduler: {
       enabled: boolean;

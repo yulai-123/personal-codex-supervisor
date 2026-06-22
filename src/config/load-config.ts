@@ -37,6 +37,20 @@ const configSchema = z.object({
   workers: z.object({
     concurrency: z.number().int().positive(),
   }),
+  assistant: z.object({
+    enabled: z.boolean(),
+    configDir: z.string().min(1),
+    maxPromptChars: z.number().int().positive(),
+    attention: z.object({
+      enabled: z.boolean(),
+      intervalMs: z.number().int().positive(),
+      urgentIntervalMs: z.number().int().positive(),
+      maxDailyMessages: z.number().int().positive(),
+      minMinutesBetweenMessages: z.number().int().nonnegative(),
+      unansweredBackoffMs: z.number().int().nonnegative(),
+      quietHours: z.array(z.string().regex(/^\d{2}:\d{2}-\d{2}:\d{2}$/)),
+    }),
+  }),
   plugins: z.object({
     scheduler: z.object({
       enabled: z.boolean(),
@@ -107,6 +121,20 @@ const defaultConfig: AppConfig = {
   },
   workers: {
     concurrency: 5,
+  },
+  assistant: {
+    enabled: false,
+    configDir: "local-only/assistant",
+    maxPromptChars: 12_000,
+    attention: {
+      enabled: false,
+      intervalMs: 30 * 60 * 1_000,
+      urgentIntervalMs: 15 * 60 * 1_000,
+      maxDailyMessages: 5,
+      minMinutesBetweenMessages: 60,
+      unansweredBackoffMs: 2 * 60 * 60 * 1_000,
+      quietHours: ["00:30-08:30"],
+    },
   },
   plugins: {
     scheduler: {
@@ -186,6 +214,14 @@ function resolveConfigPaths(config: AppConfig, projectRoot: string): AppConfig {
         ...config.plugins.wechat,
         clawbotStateDir: resolve(projectRoot, config.plugins.wechat.clawbotStateDir),
         accountId: config.plugins.wechat.accountId,
+      },
+    },
+    assistant: {
+      ...config.assistant,
+      configDir: resolve(projectRoot, config.assistant.configDir),
+      attention: {
+        ...config.assistant.attention,
+        quietHours: [...config.assistant.attention.quietHours],
       },
     },
     paths: {
